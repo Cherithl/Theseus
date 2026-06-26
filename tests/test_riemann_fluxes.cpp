@@ -1,5 +1,6 @@
 #include <memory>
 #include "unit_test.hpp"
+#include "mfem.hpp"
 #include "GasModel.hpp"
 #include "ChandrashekarFlux.hpp"
 #include "LaxFriedrichsFlux.hpp"

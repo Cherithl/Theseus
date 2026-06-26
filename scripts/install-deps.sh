@@ -145,7 +145,7 @@ build_hypre() {
     cpu)
       ;;
     cuda)
-      opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH")
+      opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH" "--without-umpire")
       ;;
     hip)
       opts+=("--with-hip" "--enable-mixedint")
@@ -191,7 +191,7 @@ build_mfem() {
     cpu)
       ;;
     cuda)
-      opts+=("-DMFEM_USE_CUDA=YES" "-DMFEM_CUDA_ARCH=$CUDA_ARCH")
+      opts+=("-DMFEM_USE_CUDA=YES" "-DMFEM_CUDA_ARCH=$CUDA_ARCH" "-DMFEM_CUDA_ARCHITECTURES=$CUDA_ARCH" "-DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCH")
       ;;
     hip)
       opts+=("-DMFEM_USE_HIP=YES")

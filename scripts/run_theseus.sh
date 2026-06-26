@@ -210,8 +210,8 @@ with open(dst, "w", encoding="utf-8") as f:
     f.write("\n")
 PY
 
-local -a MPI_LAUNCHER="mpiexec -n ${NMPIRANKS}"
-local -a LAUNCH_UTIL=""
+local MPI_LAUNCHER="mpiexec -n ${NMPIRANKS}"
+local LAUNCH_UTIL=""
 
 # if [[ "${DEVICE}" != "cpu" ]]; then
 # fi
@@ -221,6 +221,9 @@ case "${HOST_SHORT}" in
     tuo*)
         # Tuolumne@LC
         MPI_LAUNCHER="flux run --exclusive -N ${NHOSTS} -n ${NMPIRANKS}"
+        ;;
+    gh*)
+        MPI_LAUNCHER="srun -N ${NHOSTS} -n ${NMPIRANKS}"
         ;;
     front*)
         # Frontera@TACC
