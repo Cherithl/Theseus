@@ -75,6 +75,7 @@ namespace Theseus
     std::shared_ptr<mfem::ParGridFunction> dudy;
     std::shared_ptr<mfem::ParGridFunction> dudz;
     std::shared_ptr<mfem::ParGridFunction> r_gf;
+    std::vector<std::shared_ptr<mfem::ParGridFunction> > grad_u;
 
     // Subcell blending : nullptr if OFF
     std::shared_ptr<mfem::ParGridFunction> eta;
@@ -88,6 +89,9 @@ namespace Theseus
     mfem::ParGridFunction rho, mom, energy;
   
     std::unique_ptr<mfem::ParGridFunction> u, v, w;
+    std::unique_ptr<mfem::ParGridFunction> ux, uy, uz;
+    std::unique_ptr<mfem::ParGridFunction> vx, vy, vz;
+    std::unique_ptr<mfem::ParGridFunction> wx, wy, wz;
     std::unique_ptr<mfem::ParGridFunction> p, rho_axi;
   
     std::unique_ptr<mfem::ParaViewDataCollection> pd;

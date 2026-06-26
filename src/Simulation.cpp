@@ -369,7 +369,8 @@ namespace Theseus
       std::cout << "Initial exchanges complete." << std::endl;
     }
 
-    std::vector<std::shared_ptr<mfem::ParGridFunction> > grad_u(dim);
+    // std::vector<std::shared_ptr<mfem::ParGridFunction> > grad_u(dim);
+    grad_u.resize(dim);
     for(int idim = 0;idim < dim;idim++)
       grad_u[idim] = std::make_shared<mfem::ParGridFunction>(vfes.get());
 
@@ -953,11 +954,20 @@ namespace Theseus
     energy.MakeRef(fes.get(), *sol, offset_energy(stateLayout));
 
     u = std::make_unique<mfem::ParGridFunction>(fes.get());
+    ux = std::make_unique<mfem::ParGridFunction>(fes.get());
     if (dim > 1)
       {
+        uy = std::make_unique<mfem::ParGridFunction>(fes.get());
+        vx = std::make_unique<mfem::ParGridFunction>(fes.get());
+        vy = std::make_unique<mfem::ParGridFunction>(fes.get());
         v = std::make_unique<mfem::ParGridFunction>(fes.get());
         if (dim > 2)
           {
+            uz = std::make_unique<mfem::ParGridFunction>(fes.get());
+            vz = std::make_unique<mfem::ParGridFunction>(fes.get());
+            wx = std::make_unique<mfem::ParGridFunction>(fes.get());
+            wy = std::make_unique<mfem::ParGridFunction>(fes.get());
+            wz = std::make_unique<mfem::ParGridFunction>(fes.get());
             w = std::make_unique<mfem::ParGridFunction>(fes.get());
           }
       }
@@ -973,6 +983,7 @@ namespace Theseus
         if (paraview)
           {
             pd = std::make_unique<mfem::ParaViewDataCollection>(paraview_folder, pmesh.get());
+            pd->UseRestartMode(checkpoint_load);
             pd->SetPrefixPath(output_file_path);
 #ifdef AXISYMMETRIC
             pd->RegisterField("Density", rho_axi.get());
@@ -980,12 +991,21 @@ namespace Theseus
             pd->RegisterField("Density", &rho);
 #endif
             pd->RegisterField("Horizontal V", u.get());
+            pd->RegisterField("ux", ux.get());
             if (dim > 1)
               {
                 pd->RegisterField("Vertical V", v.get());
+                pd->RegisterField("uy", uy.get());
+                pd->RegisterField("vx", vx.get());
+                pd->RegisterField("vy", vy.get());
                 if (dim > 2)
                   {
                     pd->RegisterField("Normal V", w.get());
+                    pd->RegisterField("uz", uz.get());
+                    pd->RegisterField("vz", vz.get());
+                    pd->RegisterField("wx", wx.get());
+                    pd->RegisterField("wy", wy.get());
+                    pd->RegisterField("wz", wz.get());
                   }
               }
             pd->RegisterField("Pressure", p.get());
@@ -1196,16 +1216,39 @@ namespace Theseus
 
 #else
         const mfem::real_t *sol_state = sol->HostRead();
+        const mfem::real_t *grad_x = grad_u[0]->HostRead();
+        const mfem::real_t *grad_y = nullptr;
+        const mfem::real_t *grad_z = nullptr;
+        if(dim > 1)
+          {
+            grad_y = grad_u[1]->HostRead();
+            if(dim > 2)
+              {
+                grad_z = grad_u[2]->HostRead();
+              }
+          }
         for (int i = 0; i < num_dofs_scalar; i++)
           {
             Theseus::DofStateView dofState{sol_state, i};
+            Theseus::DofStateView dofGradX{grad_x, i};
             (*u)(i) = gasModel.velocity(dofState, 0);
+            (*ux)(i) = dofGradX.momentum_x(stateLayout);
             if (dim > 1)
               {
+                Theseus::DofStateView dofGradY{grad_y, i};
                 (*v)(i) = gasModel.velocity(dofState, 1);
+                (*uy)(i) = dofGradY.momentum_x(stateLayout);
+                (*vx)(i) = dofGradX.momentum_y(stateLayout);
+                (*vy)(i) = dofGradY.momentum_y(stateLayout);
                 if (dim > 2)
                   {
+                    Theseus::DofStateView dofGradZ{grad_z, i};
                     (*w)(i) = gasModel.velocity(dofState, 2);
+                    (*uz)(i) = dofGradZ.momentum_x(stateLayout);
+                    (*vz)(i) = dofGradZ.momentum_y(stateLayout);
+                    (*wx)(i) = dofGradX.momentum_z(stateLayout);
+                    (*wy)(i) = dofGradY.momentum_z(stateLayout);
+                    (*wz)(i) = dofGradZ.momentum_z(stateLayout);
                   }
               }
             (*p)(i) = gasModel.pressure(dofState);
@@ -1328,16 +1371,39 @@ namespace Theseus
             ConservativeToPrimitive(U_cons, *rho_axi, *u, *v, *p);
 #else
             const mfem::real_t *sol_state = sol->HostRead();
+            const mfem::real_t *grad_x = grad_u[0]->HostRead();
+            const mfem::real_t *grad_y = nullptr;
+            const mfem::real_t *grad_z = nullptr;
+            if(dim > 1)
+              {
+                grad_y = grad_u[1]->HostRead();
+                if(dim > 2)
+                  {
+                    grad_z = grad_u[2]->HostRead();
+                  }
+              }
             for (int i = 0; i < num_dofs_scalar; i++)
               {
                 Theseus::DofStateView dofState{sol_state, i};
+                Theseus::DofStateView dofGradX{grad_x, i};
                 (*u)(i) = gasModel.velocity(dofState, 0);
+                (*ux)(i) = dofGradX.momentum_x(stateLayout);
                 if (dim > 1)
                   {
+                    Theseus::DofStateView dofGradY{grad_y, i};
                     (*v)(i) = gasModel.velocity(dofState, 1);
+                    (*uy)(i) = dofGradY.momentum_x(stateLayout);
+                    (*vx)(i) = dofGradX.momentum_y(stateLayout);
+                    (*vy)(i) = dofGradY.momentum_y(stateLayout);
                     if (dim > 2)
                       {
+                        Theseus::DofStateView dofGradZ{grad_z, i};
                         (*w)(i) = gasModel.velocity(dofState, 2);
+                        (*uz)(i) = dofGradZ.momentum_x(stateLayout);
+                        (*vz)(i) = dofGradZ.momentum_y(stateLayout);
+                        (*wx)(i) = dofGradX.momentum_z(stateLayout);
+                        (*wy)(i) = dofGradY.momentum_z(stateLayout);
+                        (*wz)(i) = dofGradZ.momentum_z(stateLayout);
                       }
                   }
                 (*p)(i) = gasModel.pressure(dofState);
