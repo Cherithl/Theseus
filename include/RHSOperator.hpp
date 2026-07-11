@@ -94,7 +94,7 @@ namespace Theseus
     {
       return t;
     }
-    virtual void ComputeIntegralMeasures(const mfem::Vector &u, Theseus::IntegralMeasures &diag) const
+    virtual void ComputeIntegralMeasures(const mfem::Vector &u, const mfem::Vector &grad_x, const mfem::Vector &grad_y, const mfem::Vector &grad_z, Theseus::IntegralMeasures &diag) const
     { std::cout << "RHSOperatorBase::ComputeIntegralMeasures empty." << std::endl; }
     virtual void Mult(const mfem::Vector &u, mfem::Vector &dudt) const override
     { std::cout << "RHSOperatorBase::Mult empty." << std::endl; }
@@ -163,7 +163,7 @@ namespace Theseus
 #endif
 
     void Mult(const mfem::Vector &u, mfem::Vector &dudt) const override;
-    void ComputeIntegralMeasures(const mfem::Vector &u, Theseus::IntegralMeasures &diag) const override;
+    void ComputeIntegralMeasures(const mfem::Vector &u, const mfem::Vector &grad_x, const mfem::Vector &grad_y, const mfem::Vector &grad_z, Theseus::IntegralMeasures &diag) const override;
     virtual mfem::real_t FlowMult(const mfem::Vector &pu, mfem::Vector &pdudt) const = 0;
 
     std::string GasModelName() const override { return gasModelName; }

@@ -10,6 +10,7 @@ namespace Theseus
     mfem::real_t mass = 0.0;
     mfem::real_t ke = 0.0;
     mfem::real_t en = 0.0;
+    mfem::real_t visc_diss = 0.0;
     mfem::real_t max_press = 0.0;
     mfem::real_t min_press = 0.0;
     mfem::real_t max_temp = 0.0;
@@ -69,6 +70,9 @@ namespace Theseus
     mfem::Vector pdudt;
     mfem::Vector sVol;
     mfem::Vector uVol;
+    mfem::Vector grad_xVol;
+    mfem::Vector grad_yVol;
+    mfem::Vector grad_zVol;
     mfem::Vector volAux;
     mfem::Vector rhsVol;
     mfem::Vector uInt;

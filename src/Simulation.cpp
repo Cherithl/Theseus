@@ -68,7 +68,7 @@ namespace Theseus
       }
   }
 
-  constexpr bool debug_simulation = true;
+  constexpr bool debug_simulation = false;
 
   int Simulation::LoadConfig(const std::string &config_file_path)
   {
@@ -954,20 +954,20 @@ namespace Theseus
     energy.MakeRef(fes.get(), *sol, offset_energy(stateLayout));
 
     u = std::make_unique<mfem::ParGridFunction>(fes.get());
-    ux = std::make_unique<mfem::ParGridFunction>(fes.get());
+    // ux = std::make_unique<mfem::ParGridFunction>(fes.get());
     if (dim > 1)
       {
-        uy = std::make_unique<mfem::ParGridFunction>(fes.get());
-        vx = std::make_unique<mfem::ParGridFunction>(fes.get());
-        vy = std::make_unique<mfem::ParGridFunction>(fes.get());
+        // uy = std::make_unique<mfem::ParGridFunction>(fes.get());
+        // vx = std::make_unique<mfem::ParGridFunction>(fes.get());
+        // vy = std::make_unique<mfem::ParGridFunction>(fes.get());
         v = std::make_unique<mfem::ParGridFunction>(fes.get());
         if (dim > 2)
           {
-            uz = std::make_unique<mfem::ParGridFunction>(fes.get());
-            vz = std::make_unique<mfem::ParGridFunction>(fes.get());
-            wx = std::make_unique<mfem::ParGridFunction>(fes.get());
-            wy = std::make_unique<mfem::ParGridFunction>(fes.get());
-            wz = std::make_unique<mfem::ParGridFunction>(fes.get());
+          //   uz = std::make_unique<mfem::ParGridFunction>(fes.get());
+          //   vz = std::make_unique<mfem::ParGridFunction>(fes.get());
+          //   wx = std::make_unique<mfem::ParGridFunction>(fes.get());
+          //   wy = std::make_unique<mfem::ParGridFunction>(fes.get());
+          //   wz = std::make_unique<mfem::ParGridFunction>(fes.get());
             w = std::make_unique<mfem::ParGridFunction>(fes.get());
           }
       }
@@ -991,21 +991,21 @@ namespace Theseus
             pd->RegisterField("Density", &rho);
 #endif
             pd->RegisterField("Horizontal V", u.get());
-            pd->RegisterField("ux", ux.get());
+            // pd->RegisterField("ux", ux.get());
             if (dim > 1)
               {
                 pd->RegisterField("Vertical V", v.get());
-                pd->RegisterField("uy", uy.get());
-                pd->RegisterField("vx", vx.get());
-                pd->RegisterField("vy", vy.get());
+                // pd->RegisterField("uy", uy.get());
+                // pd->RegisterField("vx", vx.get());
+                // pd->RegisterField("vy", vy.get());
                 if (dim > 2)
                   {
                     pd->RegisterField("Normal V", w.get());
-                    pd->RegisterField("uz", uz.get());
-                    pd->RegisterField("vz", vz.get());
-                    pd->RegisterField("wx", wx.get());
-                    pd->RegisterField("wy", wy.get());
-                    pd->RegisterField("wz", wz.get());
+                    // pd->RegisterField("uz", uz.get());
+                    // pd->RegisterField("vz", vz.get());
+                    // pd->RegisterField("wx", wx.get());
+                    // pd->RegisterField("wy", wy.get());
+                    // pd->RegisterField("wz", wz.get());
                   }
               }
             pd->RegisterField("Pressure", p.get());
@@ -1081,7 +1081,7 @@ namespace Theseus
     ConservativeToPrimitive(U_cons, *rho_axi, *u, *v, *p);
     rhsOp->ComputeIntegralMeasures(U_cons, diag);
 #else
-    rhsOp->ComputeIntegralMeasures(*sol, diag);
+    rhsOp->ComputeIntegralMeasures(*sol, *grad_u[0], *grad_u[1], *grad_u[2], diag);
 #endif
 
     Theseus::IntegralMeasures diag0 = rhsOp->GetIntegralMeasuresBaseline();
@@ -1216,39 +1216,39 @@ namespace Theseus
 
 #else
         const mfem::real_t *sol_state = sol->HostRead();
-        const mfem::real_t *grad_x = grad_u[0]->HostRead();
-        const mfem::real_t *grad_y = nullptr;
-        const mfem::real_t *grad_z = nullptr;
-        if(dim > 1)
-          {
-            grad_y = grad_u[1]->HostRead();
-            if(dim > 2)
-              {
-                grad_z = grad_u[2]->HostRead();
-              }
-          }
+        // const mfem::real_t *grad_x = grad_u[0]->HostRead();
+        // const mfem::real_t *grad_y = nullptr;
+        // const mfem::real_t *grad_z = nullptr;
+        // if(dim > 1)
+        //   {
+        //     grad_y = grad_u[1]->HostRead();
+        //     if(dim > 2)
+        //       {
+        //         grad_z = grad_u[2]->HostRead();
+        //       }
+        //   }
         for (int i = 0; i < num_dofs_scalar; i++)
           {
             Theseus::DofStateView dofState{sol_state, i};
-            Theseus::DofStateView dofGradX{grad_x, i};
+            // Theseus::DofStateView dofGradX{grad_x, i};
             (*u)(i) = gasModel.velocity(dofState, 0);
-            (*ux)(i) = dofGradX.momentum_x(stateLayout);
+            // (*ux)(i) = dofGradX.momentum_x(stateLayout);
             if (dim > 1)
               {
-                Theseus::DofStateView dofGradY{grad_y, i};
+                // Theseus::DofStateView dofGradY{grad_y, i};
                 (*v)(i) = gasModel.velocity(dofState, 1);
-                (*uy)(i) = dofGradY.momentum_x(stateLayout);
-                (*vx)(i) = dofGradX.momentum_y(stateLayout);
-                (*vy)(i) = dofGradY.momentum_y(stateLayout);
+                // (*uy)(i) = dofGradY.momentum_x(stateLayout);
+                // (*vx)(i) = dofGradX.momentum_y(stateLayout);
+                // (*vy)(i) = dofGradY.momentum_y(stateLayout);
                 if (dim > 2)
                   {
-                    Theseus::DofStateView dofGradZ{grad_z, i};
+                    // Theseus::DofStateView dofGradZ{grad_z, i};
                     (*w)(i) = gasModel.velocity(dofState, 2);
-                    (*uz)(i) = dofGradZ.momentum_x(stateLayout);
-                    (*vz)(i) = dofGradZ.momentum_y(stateLayout);
-                    (*wx)(i) = dofGradX.momentum_z(stateLayout);
-                    (*wy)(i) = dofGradY.momentum_z(stateLayout);
-                    (*wz)(i) = dofGradZ.momentum_z(stateLayout);
+                    // (*uz)(i) = dofGradZ.momentum_x(stateLayout);
+                    // (*vz)(i) = dofGradZ.momentum_y(stateLayout);
+                    // (*wx)(i) = dofGradX.momentum_z(stateLayout);
+                    // (*wy)(i) = dofGradY.momentum_z(stateLayout);
+                    // (*wz)(i) = dofGradZ.momentum_z(stateLayout);
                   }
               }
             (*p)(i) = gasModel.pressure(dofState);
@@ -1304,7 +1304,7 @@ namespace Theseus
           // NS->RecoverStateFromWeighted(*sol, U_cons);
           // NS->ComputeIntegralMeasures(U_cons, diag);
 #else
-          rhsOp->ComputeIntegralMeasures(*sol, diag);
+          rhsOp->ComputeIntegralMeasures(*sol, *grad_u[0], *grad_u[1], *grad_u[2], diag);
 #endif
         }
         // Update the time step size with CFL?
@@ -1371,39 +1371,39 @@ namespace Theseus
             ConservativeToPrimitive(U_cons, *rho_axi, *u, *v, *p);
 #else
             const mfem::real_t *sol_state = sol->HostRead();
-            const mfem::real_t *grad_x = grad_u[0]->HostRead();
-            const mfem::real_t *grad_y = nullptr;
-            const mfem::real_t *grad_z = nullptr;
-            if(dim > 1)
-              {
-                grad_y = grad_u[1]->HostRead();
-                if(dim > 2)
-                  {
-                    grad_z = grad_u[2]->HostRead();
-                  }
-              }
+            // const mfem::real_t *grad_x = grad_u[0]->HostRead();
+            // const mfem::real_t *grad_y = nullptr;
+            // const mfem::real_t *grad_z = nullptr;
+            // if(dim > 1)
+            //   {
+            //     grad_y = grad_u[1]->HostRead();
+            //     if(dim > 2)
+            //       {
+            //         grad_z = grad_u[2]->HostRead();
+            //       }
+            //   }
             for (int i = 0; i < num_dofs_scalar; i++)
               {
                 Theseus::DofStateView dofState{sol_state, i};
-                Theseus::DofStateView dofGradX{grad_x, i};
+                // Theseus::DofStateView dofGradX{grad_x, i};
                 (*u)(i) = gasModel.velocity(dofState, 0);
-                (*ux)(i) = dofGradX.momentum_x(stateLayout);
+                // (*ux)(i) = dofGradX.momentum_x(stateLayout);
                 if (dim > 1)
                   {
-                    Theseus::DofStateView dofGradY{grad_y, i};
+                    // Theseus::DofStateView dofGradY{grad_y, i};
                     (*v)(i) = gasModel.velocity(dofState, 1);
-                    (*uy)(i) = dofGradY.momentum_x(stateLayout);
-                    (*vx)(i) = dofGradX.momentum_y(stateLayout);
-                    (*vy)(i) = dofGradY.momentum_y(stateLayout);
+                    // (*uy)(i) = dofGradY.momentum_x(stateLayout);
+                    // (*vx)(i) = dofGradX.momentum_y(stateLayout);
+                    // (*vy)(i) = dofGradY.momentum_y(stateLayout);
                     if (dim > 2)
                       {
-                        Theseus::DofStateView dofGradZ{grad_z, i};
+                        // Theseus::DofStateView dofGradZ{grad_z, i};
                         (*w)(i) = gasModel.velocity(dofState, 2);
-                        (*uz)(i) = dofGradZ.momentum_x(stateLayout);
-                        (*vz)(i) = dofGradZ.momentum_y(stateLayout);
-                        (*wx)(i) = dofGradX.momentum_z(stateLayout);
-                        (*wy)(i) = dofGradY.momentum_z(stateLayout);
-                        (*wz)(i) = dofGradZ.momentum_z(stateLayout);
+                        // (*uz)(i) = dofGradZ.momentum_x(stateLayout);
+                        // (*vz)(i) = dofGradZ.momentum_y(stateLayout);
+                        // (*wx)(i) = dofGradX.momentum_z(stateLayout);
+                        // (*wy)(i) = dofGradY.momentum_z(stateLayout);
+                        // (*wz)(i) = dofGradZ.momentum_z(stateLayout);
                       }
                   }
                 (*p)(i) = gasModel.pressure(dofState);
@@ -1479,13 +1479,18 @@ namespace Theseus
                 } else {
                   Ostr << ", cfl: " << cfl_rep;
                 }
+                // Ostr << std::endl
+                //      << "rho(" << diag.min_dens << "," << diag.max_dens << "), "
+                //      << "p(" << diag.min_press << "," << diag.max_press << "), "
+                //      << "T(" << diag.min_temp << "," << diag.max_temp << ")" << std::endl
+                //      << "TotalChange: Mass: " << (diag.mass - diag0.mass) / diag0.mass
+                //      << ", Energy: " <<  (diag.en - diag0.en) / diag0.en
+                //      << ", K.E.: " << (diag.ke - diag0.ke) / ke0 << std::endl;
                 Ostr << std::endl
-                     << "rho(" << diag.min_dens << "," << diag.max_dens << "), "
-                     << "p(" << diag.min_press << "," << diag.max_press << "), "
-                     << "T(" << diag.min_temp << "," << diag.max_temp << ")" << std::endl
-                     << "TotalChange: Mass: " << (diag.mass - diag0.mass) / diag0.mass
-                     << ", Energy: " <<  (diag.en - diag0.en) / diag0.en
-                     << ", K.E.: " << (diag.ke - diag0.ke) / ke0 << std::endl;
+                     << "CL Debug: time: " << t
+                     << ", Mass: " << diag.mass
+                     << ", KE: " << diag.ke
+                     << ", Viscous Dissipation.: " << diag.visc_diss << std::endl;
                 std::cout << Ostr.str();
               }
           }

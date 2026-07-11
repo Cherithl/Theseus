@@ -111,7 +111,9 @@ namespace Theseus
 #endif
 
   template<typename PhysicsT>
-  void RHSOperator<PhysicsT>::ComputeIntegralMeasures(const mfem::Vector &u, Theseus::IntegralMeasures &diag) const
+  void RHSOperator<PhysicsT>::ComputeIntegralMeasures(const mfem::Vector &u, const mfem::Vector &grad_x,
+                                                      const mfem::Vector &grad_y, const mfem::Vector &grad_z,
+                                                      Theseus::IntegralMeasures &diag) const
   {
     Theseus::ScopedTimer timer("ComputeIntegralMeasures");
     
@@ -132,14 +134,40 @@ namespace Theseus
       operator_cache.uVol.SetSize(nval_restr);
       operator_cache.uVol.UseDevice();
     }
+
+    if(operator_cache.grad_xVol.Size() != nval_restr){
+      operator_cache.grad_xVol.SetSize(nval_restr);
+      operator_cache.grad_xVol.UseDevice();
+    }
+
+    if(operator_cache.grad_yVol.Size() != nval_restr){
+      operator_cache.grad_yVol.SetSize(nval_restr);
+      operator_cache.grad_yVol.UseDevice();
+    }
+
+    if(operator_cache.grad_zVol.Size() != nval_restr){
+      operator_cache.grad_zVol.SetSize(nval_restr);
+      operator_cache.grad_zVol.UseDevice();
+    }
+
     mfem::Vector &Ue(operator_cache.uVol);
+    mfem::Vector &grad_x_e(operator_cache.grad_xVol);
+    mfem::Vector &grad_y_e(operator_cache.grad_yVol);
+    mfem::Vector &grad_z_e(operator_cache.grad_zVol);
 
     operator_cache.restr_v->Mult(u, Ue);
+    operator_cache.restr_v->Mult(grad_x, grad_x_e);
+    operator_cache.restr_v->Mult(grad_y, grad_y_e);
+    operator_cache.restr_v->Mult(grad_z, grad_z_e);
     const mfem::real_t *Ue_d = Ue.Read();
+    const mfem::real_t *grad_x_d = grad_x_e.Read();
+    const mfem::real_t *grad_y_d = grad_y_e.Read();
+    const mfem::real_t *grad_z_d = grad_z_e.Read();
     const int estride = ndof*neq;
 
     mfem::Vector elMass_integral(ne);
     mfem::Vector elKE_integral(ne);
+    mfem::Vector elVisc_diss_integral(ne);
     mfem::Vector elEnergy_integral(ne);
     mfem::Vector elMaxPressure(ne);
     mfem::Vector elMaxTemperature(ne);
@@ -150,6 +178,7 @@ namespace Theseus
 
     elMass_integral.UseDevice();
     elKE_integral.UseDevice();
+    elVisc_diss_integral.UseDevice();
     elEnergy_integral.UseDevice();
     elMaxPressure.UseDevice();
     elMaxTemperature.UseDevice();
@@ -160,6 +189,7 @@ namespace Theseus
 
     mfem::real_t *elMass_int_d = elMass_integral.Write();
     mfem::real_t *elKE_int_d = elKE_integral.Write();
+    mfem::real_t *elVisc_diss_int_d = elVisc_diss_integral.Write();
     mfem::real_t *elEnergy_int_d = elEnergy_integral.Write();
 
     mfem::real_t *elPress_max_d = elMaxPressure.Write();
@@ -173,10 +203,14 @@ namespace Theseus
     mfem::forall(ne, [=] MFEM_HOST_DEVICE (int e)
     {
       const mfem::real_t *u_el = Ue_d + e * estride;
+      const mfem::real_t *grad_x_el = grad_x_d + e * estride;
+      const mfem::real_t *grad_y_el = grad_y_d + e * estride;
+      const mfem::real_t *grad_z_el = grad_z_d + e *estride;
       const mfem::real_t *qWgt = qWts_d + e * ndof;
    
       mfem::real_t mass_int = 0.0;
       mfem::real_t ke_int = 0.0;
+      mfem::real_t visc_diss_int = 0.0;
       mfem::real_t en_int = 0.0;
       mfem::real_t min_dens = 1e32;
       mfem::real_t max_dens = 0.0;
@@ -187,14 +221,43 @@ namespace Theseus
 
       for(int ep = 0;ep < ndof;ep++){
         mfem::real_t elstate[Theseus::MAXEQ];
+        mfem::real_t grad_x_elstate[Theseus::MAXEQ];
+        mfem::real_t grad_y_elstate[Theseus::MAXEQ];
+        mfem::real_t grad_z_elstate[Theseus::MAXEQ];
 	Theseus::Kernels::el_gather_state(u_el, ndof, neq, ep, elstate);
+  Theseus::Kernels::el_gather_state(grad_x_el, ndof, neq, ep, grad_x_elstate);
+  Theseus::Kernels::el_gather_state(grad_y_el, ndof, neq, ep, grad_y_elstate);
+  Theseus::Kernels::el_gather_state(grad_z_el, ndof, neq, ep, grad_z_elstate);
         Theseus::PointStateView S{elstate};
+        Theseus::PointStateView grad_x_S{grad_x_elstate};
+        Theseus::PointStateView grad_y_S{grad_y_elstate};
+        Theseus::PointStateView grad_z_S{grad_z_elstate};
 
         mfem::real_t rho = gas.density(S);
         mfem::real_t ke = gas.kinetic_energy_density(S);
         mfem::real_t rhoE = gas.energy(S); // energy density
         mfem::real_t press = gas.pressure(S);
         mfem::real_t temper = gas.temperature(S);
+
+        mfem::real_t ux = gas.momentum(grad_x_S, 0);
+        mfem::real_t uy = gas.momentum(grad_y_S, 0);
+        mfem::real_t uz = gas.momentum(grad_z_S, 0);
+        mfem::real_t vx = gas.momentum(grad_x_S, 1);
+        mfem::real_t vy = gas.momentum(grad_y_S, 1);
+        mfem::real_t vz = gas.momentum(grad_z_S, 1);
+        mfem::real_t wx = gas.momentum(grad_x_S, 2);
+        mfem::real_t wy = gas.momentum(grad_y_S, 2);
+        mfem::real_t wz = gas.momentum(grad_z_S, 2);
+
+        mfem::real_t Sxx = ux;
+        mfem::real_t Syy = vy;
+        mfem::real_t Szz = wz;
+        mfem::real_t Sxy = 0.5 * (uy + vx);
+        mfem::real_t Sxz = 0.5 * (uz + wx);
+        mfem::real_t Syz = 0.5 * (vz + wy);
+        mfem::real_t mu = gas.viscosity(S);
+
+        visc_diss_int += 2 * mu * (Sxx*Sxx + Syy*Syy + Szz*Szz + 2.0*(Sxy*Sxy + Sxz*Sxz + Syz*Syz)) * qWgt[ep];
 
         mass_int += rho * qWgt[ep];
         ke_int += ke * qWgt[ep];
@@ -210,6 +273,7 @@ namespace Theseus
 
       elMass_int_d[e]   = mass_int;
       elKE_int_d[e]     = ke_int;
+      elVisc_diss_int_d[e] = visc_diss_int;
       elEnergy_int_d[e] = en_int;
       elPress_max_d[e]  = max_press;
       elPress_min_d[e]  = min_press;
@@ -225,6 +289,7 @@ namespace Theseus
     // diag.en = mfem::Sum(elEnergy_integral);
     diag.mass = 0.0;
     diag.ke   = 0.0;
+    diag.visc_diss = 0.0;
     diag.en   = 0.0;
     diag.min_press = 1e32;
     diag.max_press = 0.0;
@@ -235,6 +300,7 @@ namespace Theseus
 
     const mfem::real_t *mass_h = elMass_integral.HostRead();
     const mfem::real_t *ke_h   = elKE_integral.HostRead();
+    const mfem::real_t *visc_diss_h = elVisc_diss_integral.HostRead();
     const mfem::real_t *en_h   = elEnergy_integral.HostRead();
     const mfem::real_t *minpress_h = elMinPressure.HostRead();
     const mfem::real_t *maxpress_h = elMaxPressure.HostRead();
@@ -246,6 +312,7 @@ namespace Theseus
     for (int e = 0; e < ne; ++e) {
       diag.mass += mass_h[e];
       diag.ke   += ke_h[e];
+      diag.visc_diss += visc_diss_h[e];
       diag.en   += en_h[e];
       diag.min_press = Theseus::Kernels::rmin(diag.min_press, minpress_h[e]);
       diag.max_press = Theseus::Kernels::rmax(diag.max_press, maxpress_h[e]);
@@ -255,14 +322,15 @@ namespace Theseus
       diag.max_dens = Theseus::Kernels::rmax(diag.max_dens, maxdens_h[e]);
     }
 
-    mfem::real_t sendbuf[3] = {diag.mass, diag.ke, diag.en};
-    mfem::real_t recvbuf[3] = {0.0, 0.0, 0.0};
+    mfem::real_t sendbuf[4] = {diag.mass, diag.ke, diag.visc_diss, diag.en};
+    mfem::real_t recvbuf[4] = {0.0, 0.0, 0.0, 0.0};
 
-    MPI_Allreduce(sendbuf, recvbuf, 3, mfem::MPITypeMap<mfem::real_t>::mpi_type, MPI_SUM, pmesh->GetComm());
+    MPI_Allreduce(sendbuf, recvbuf, 4, mfem::MPITypeMap<mfem::real_t>::mpi_type, MPI_SUM, pmesh->GetComm());
 
     diag.mass = recvbuf[0];
     diag.ke = recvbuf[1];
-    diag.en = recvbuf[2];
+    diag.visc_diss = recvbuf[2];
+    diag.en = recvbuf[3];
 
     sendbuf[0] = diag.min_press;
     sendbuf[1] = diag.min_temp;
