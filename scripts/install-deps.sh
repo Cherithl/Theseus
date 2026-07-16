@@ -25,6 +25,9 @@ METIS_REF="${METIS_REF:-master}"
 HYPRE_REPO="${HYPRE_REPO:-https://github.com/hypre-space/hypre.git}"
 HYPRE_REF="${HYPRE_REF:-master}"
 
+GSLIB_REPO="${GSLIB_REPO:-https://github.com/Nek5000/gslib.git}"
+GSLIB_REF="${GSLIB_REF:-master}"
+
 MFEM_REPO="${MFEM_REPO:-https://github.com/mfem/mfem.git}"
 MFEM_REF="${MFEM_REF:-master}"
 
@@ -170,6 +173,25 @@ build_hypre() {
   cd - >/dev/null
 }
 
+build_gslib() {
+  local src="$SRC_DIR/gslib"
+
+  cd "$src"
+
+  run_logged "gslib-clean" make clean || true
+  run_logged "gslib-build" make -j "$JOBS" CC="$CC"
+
+  install -m 644 \
+    "$src/build/lib/libgs.a" \
+    "$PREFIX/lib/libgs.a"
+
+  cp -a \
+    "$src/build/include/gslib/." \
+    "$PREFIX/include/"
+
+  cd - >/dev/null
+}
+
 build_mfem() {
   local src="$SRC_DIR/mfem"
   local build="$BUILD_DIR/mfem"
@@ -185,6 +207,8 @@ build_mfem() {
     "-DCMAKE_PREFIX_PATH=$PREFIX"
     "-DMFEM_USE_MPI=YES"
     "-DMFEM_USE_METIS_5=YES"
+    "-DMFEM_USE_GSLIB=YES"
+    "-DGSLIB_DIR=$PREFIX"
   )
 
   case "$DEVICE" in
@@ -226,11 +250,13 @@ record_system_info
 clone_or_update "$GKLIB_REPO" "$GKLIB_REF" "$SRC_DIR/GKlib"
 clone_or_update "$METIS_REPO" "$METIS_REF" "$SRC_DIR/METIS"
 clone_or_update "$HYPRE_REPO" "$HYPRE_REF" "$SRC_DIR/hypre"
+clone_or_update "$GSLIB_REPO" "$GSLIB_REF" "$SRC_DIR/gslib"
 clone_or_update "$MFEM_REPO" "$MFEM_REF" "$SRC_DIR/mfem"
 
 build_gklib
 build_metis
 build_hypre
+build_gslib
 build_mfem
 
 record_final_summary

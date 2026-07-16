@@ -68,7 +68,7 @@ namespace Theseus
       }
   }
 
-  constexpr bool debug_simulation = true;
+  constexpr bool debug_simulation = false;
 
   int Simulation::LoadConfig(const std::string &config_file_path)
   {
@@ -175,7 +175,21 @@ namespace Theseus
     signature = runtime["conditions"]["initial_conditions"].value("signature", 0);
     std::string IC_key = runtime["conditions"]["initial_conditions"].value("function", "LidDrivenCavityIC");
 
-    if (signature == 0)
+    if(IC_key == "AcousticPlaneWaveIC")
+      {
+        Prandtl::AcousticPlaneWaveParams params;
+        params.UInf = runtime["conditions"]["initial_conditions"]["params"].value("UInf", 0.0);
+        params.RhoInf = runtime["conditions"]["initial_conditions"]["params"].value("RhoInf", 1.0);
+        params.PInf = runtime["conditions"]["initial_conditions"]["params"].value("PInf", 1.0);
+        params.Amp = runtime["conditions"]["initial_conditions"]["params"].value("Amp", 0.1);
+        params.Freq = runtime["conditions"]["initial_conditions"]["params"].value("Freq", 1.0);
+        params.Phase = runtime["conditions"]["initial_conditions"]["params"].value("Phase", 0.0);
+        params.Speed = runtime["conditions"]["initial_conditions"]["params"].value("Speed", 1);
+        u0 = std::make_unique<mfem::VectorFunctionCoefficient>
+	  (num_equations,
+	   Prandtl::AcousticPlaneWaveIC(params));
+      }
+    else if (signature == 0)
       {
         u0 = std::make_unique<mfem::VectorFunctionCoefficient>
 	  (num_equations,
@@ -320,6 +334,39 @@ namespace Theseus
       }
 
     pmesh->ExchangeFaceNbrData();
+
+    // CL NOTE : For the midpoint of the mesh
+    min_coord.SetSize(dim);
+    max_coord.SetSize(dim);
+    mid_coord.SetSize(dim);
+    min_coord = 1e20;
+    max_coord = -1e20;
+
+    for (int i=0; i < pmesh->GetNV(); i++)
+    {
+      const mfem::real_t *vertex = pmesh->GetVertex(i);
+      for (int d=0; d < dim; d++)
+      {
+        min_coord(d) = std::min(min_coord(d), vertex[d]);
+        max_coord(d) = std::max(max_coord(d), vertex[d]);
+      }
+    }
+
+    MPI_Allreduce(MPI_IN_PLACE, min_coord.GetData(), dim, mfem::MPITypeMap<mfem::real_t>::mpi_type, MPI_MIN, pmesh->GetComm());
+    MPI_Allreduce(MPI_IN_PLACE, max_coord.GetData(), dim, mfem::MPITypeMap<mfem::real_t>::mpi_type, MPI_MAX, pmesh->GetComm());
+
+    for (int d=0; d < dim; d++)
+    {
+      mid_coord(d) = 0.5 * (min_coord(d) + max_coord(d));
+    }
+
+    if(mfem::Mpi::Root())
+    {
+      for(int d=0; d < dim; d++)
+      {
+        std::cout << "Mid coord [" << d << "] = " << mid_coord(d) << std::endl;
+      }
+    }
 
 #ifdef SUBCELL_FV_BLENDING
     fec0 = std::make_shared<mfem::DG_FECollection>(0, dim);
@@ -1226,6 +1273,9 @@ namespace Theseus
           }
       }
 
+mfem::FindPointsGSLIB finder;
+finder.Setup(*pmesh);
+finder.FindPoints(mid_coord);
 
     while (!done)
       {
@@ -1404,6 +1454,14 @@ namespace Theseus
           {
             mfem::real_t ke0 = diag0.ke;
             if(ke0 == 0.0){ ke0 = 1.0; };
+            const mfem::real_t *sol_state = sol->HostRead();
+            for (int i = 0; i < num_dofs_scalar; i++)
+              {
+                Theseus::DofStateView dofState{sol_state, i};
+                (*p)(i) = gasModel.pressure(dofState);
+              }
+            mfem::Vector Pressure_probe;
+            finder.Interpolate(*p, Pressure_probe);
             if (mfem::Mpi::Root())
               {
                 std::ostringstream Ostr;
@@ -1413,13 +1471,14 @@ namespace Theseus
                 } else {
                   Ostr << ", cfl: " << cfl_rep;
                 }
-                Ostr << std::endl
-                     << "rho(" << diag.min_dens << "," << diag.max_dens << "), "
-                     << "p(" << diag.min_press << "," << diag.max_press << "), "
-                     << "T(" << diag.min_temp << "," << diag.max_temp << ")" << std::endl
-                     << "TotalChange: Mass: " << (diag.mass - diag0.mass) / diag0.mass
-                     << ", Energy: " <<  (diag.en - diag0.en) / diag0.en
-                     << ", K.E.: " << (diag.ke - diag0.ke) / ke0 << std::endl;
+                // Ostr << std::endl
+                //      << "rho(" << diag.min_dens << "," << diag.max_dens << "), "
+                //      << "p(" << diag.min_press << "," << diag.max_press << "), "
+                //      << "T(" << diag.min_temp << "," << diag.max_temp << ")" << std::endl
+                //      << "TotalChange: Mass: " << (diag.mass - diag0.mass) / diag0.mass
+                //      << ", Energy: " <<  (diag.en - diag0.en) / diag0.en
+                //      << ", K.E.: " << (diag.ke - diag0.ke) / ke0 << std::endl;
+                Ostr << std::endl << "time, Pressure probe: " << t << " , " << Pressure_probe(0) << std::endl;
                 std::cout << Ostr.str();
               }
           }
