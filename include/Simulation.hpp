@@ -57,6 +57,8 @@ namespace Theseus
   
     mfem::Array<int> mesh_ordering;
     std::shared_ptr<mfem::ParMesh> pmesh;
+
+    mfem::Vector min_coord, max_coord, mid_coord;
   
     int btype = mfem::BasisType::GaussLobatto;
     int ordering = mfem::Ordering::byNODES;

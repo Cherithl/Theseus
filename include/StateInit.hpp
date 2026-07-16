@@ -5,6 +5,49 @@
 namespace Prandtl
 {
 
+  struct AcousticPlaneWaveParams
+  {
+    mfem::real_t UInf  ; // freestream velocity
+    mfem::real_t RhoInf; // freestream density
+    mfem::real_t PInf  ; // freestream pressure
+    mfem::real_t Amp   ; // amplitude of the acoustic wave
+    mfem::real_t Freq  ; // frequency of the planar wave
+    mfem::real_t Phase ; // phase of the planar wave
+    int Speed; // speed of the wave, 1 for forward, -1 for backward
+  };
+
+  inline std::function<void(const mfem::Vector&, mfem::Vector&)> AcousticPlaneWaveIC(const AcousticPlaneWaveParams params)
+  {
+    return [params](const mfem::Vector &x, mfem::Vector &y)
+    {
+      MFEM_ASSERT(x.Size() == 2, "Acoustic Wave is a 2D problem");
+
+      const mfem::real_t Uinf   = params.UInf;
+      const mfem::real_t RhoInf = params.RhoInf;
+      const mfem::real_t PInf   = params.PInf;
+      const mfem::real_t gamma  = 1.4;
+
+      const mfem::real_t CInf  = std::sqrt(gamma * PInf / RhoInf);
+      const mfem::real_t Omega = 2*M_PI*params.Freq;
+      const mfem::real_t Kx = 2*M_PI*params.Freq / (Uinf + params.Speed * CInf);
+
+      const mfem::real_t RhoCoeff  = params.Amp/(CInf*CInf);
+      const mfem::real_t RhoVCoeff = params.Speed * params.Amp/(RhoInf * CInf);
+
+      mfem::real_t t = 0.0;
+      const mfem::real_t theta = params.Phase - Omega * t;
+
+      mfem::real_t rho = RhoInf + RhoCoeff   * std::cos(Kx * x(0) + theta);
+      mfem::real_t u   = Uinf   + RhoVCoeff  * std::cos(Kx * x(0) + theta);
+      mfem::real_t p   = PInf   + params.Amp * std::cos(Kx * x(0) + theta);
+
+      y(0) = rho;
+      y(1) = rho * u;
+      y(2) = 0.0;
+      y(3) = p / (gamma - 1.0) + 0.5 * rho * u * u;
+    };
+  }
+
   // Taylor Green Vortex initial condition
   std::function<void(const mfem::Vector&, mfem::Vector&)> TaylorGreenVortexIC(mfem::real_t gamma, mfem::real_t Ma)
   {
