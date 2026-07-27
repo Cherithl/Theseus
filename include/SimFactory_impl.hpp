@@ -4,6 +4,7 @@
 #include "EulerOperator.hpp"
 #include "NSOperator.hpp"
 #include "LaxFriedrichsFlux.hpp"
+#include "ModifiedLaxFriedrichsFlux.hpp"
 #include "ChandrashekarFlux.hpp"
 #include "HLLFlux.hpp"
 
@@ -102,6 +103,12 @@ namespace Theseus {
       inv_flux_string == "lax_friedrichs" ||
       starts_with(inv_flux_string, "lax");
 
+	const bool use_mllf =
+	  inv_flux_string == "mllf" ||
+	  inv_flux_string == "modifiedllf" ||
+	  inv_flux_string == "modified_lax_friedrichs" ||
+	  starts_with(inv_flux_string, "modi");
+
     const bool viscous =
       starts_with(flow_model_string, "visc") ||
       starts_with(flow_model_string, "nav")  ||
@@ -142,6 +149,18 @@ namespace Theseus {
 	    using Physics =
 	      Theseus::PhysicsTraits<Theseus::IdealGasModel,
 				     Theseus::LaxFriedrichsFlux::InviscidFlux>;
+
+	    return MakeTypedRHSOperator<Physics>(inviscid, runtime,
+						 vfes, fes0, pmesh, eta, alpha, grad_u,
+						 indicator, r_gf, alpha_max, gasModelName,
+						 numFluxName);
+	  }
+	else if (use_mllf)
+	  {
+	    std::string numFluxName("ModifiedLLF");
+	    using Physics =
+	      Theseus::PhysicsTraits<Theseus::IdealGasModel,
+				     Theseus::ModifiedLaxFriedrichsFlux::InviscidFlux>;
 
 	    return MakeTypedRHSOperator<Physics>(inviscid, runtime,
 						 vfes, fes0, pmesh, eta, alpha, grad_u,
