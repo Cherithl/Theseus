@@ -26,6 +26,12 @@ METIS_REF="${METIS_REF:-master}"
 HYPRE_REPO="${HYPRE_REPO:-https://github.com/hypre-space/hypre.git}"
 HYPRE_REF="${HYPRE_REF:-master}"
 
+HDF5_REPO="${HDF5_REPO:-https://github.com/HDFGroup/hdf5.git}"
+HDF5_REF="${HDF5_REF:-2.1.1}"
+
+CONDUIT_REPO="${CONDUIT_REPO:-https://github.com/llnl/conduit.git}"
+CONDUIT_REF="${CONDUIT_REF:-v0.9.7}"
+
 MFEM_REPO="${MFEM_REPO:-https://github.com/mfem/mfem.git}"
 MFEM_REF="${MFEM_REF:-master}"
 
@@ -176,7 +182,7 @@ build_hypre() {
     cpu)
       ;;
     cuda)
-      opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH" "--with-umpire-include=${PREFIX}/include" "--with-umpire-lib-dirs=${PREFIX}/lib" "--with-umpire-libs=\"umpire camp\"")
+      opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH" "--without-umpire")
       ;;
     hip)
       opts+=("--with-hip" "--enable-mixedint")
@@ -201,6 +207,68 @@ build_hypre() {
   cd - >/dev/null
 }
 
+build_hdf5() {
+  local src="$SRC_DIR/hdf5"
+  local build="$BUILD_DIR/hdf5"
+
+  rm -rf "$build"
+  mkdir -p "$build"
+
+  local opts=(
+    "-S" "$src"
+    "-B" "$build"
+    "-DCMAKE_BUILD_TYPE=Release"
+    "-DCMAKE_INSTALL_PREFIX=$PREFIX"
+    "-DCMAKE_C_COMPILER=$CC"
+    "-DHDF5_ENABLE_PARALLEL=ON"
+    "-DHDF5_BUILD_CPP_LIB=OFF"
+    "-DHDF5_BUILD_FORTRAN=OFF"
+    "-DHDF5_BUILD_EXAMPLES=OFF"
+    "-DBUILD_TESTING=OFF"
+  )
+
+  log ""
+  log "HDF5 CMake options:"
+  printf '  %q\n' cmake "${opts[@]}" | tee -a "$MANIFEST"
+
+  run_logged "hdf5-cmake" cmake "${opts[@]}"
+  run_logged "hdf5-build" cmake --build "$build" -j "$JOBS"
+  run_logged "hdf5-install" cmake --install "$build"
+}
+
+build_conduit() {
+  local src="$SRC_DIR/conduit"
+  local build="$BUILD_DIR/conduit"
+
+  rm -rf "$build"
+  mkdir -p "$build"
+
+  run_logged "conduit-submodules" \
+    git -C "$src" submodule update --init --recursive
+
+  local opts=(
+    "-S" "$src/src"
+    "-B" "$build"
+    "-DCMAKE_BUILD_TYPE=Release"
+    "-DCMAKE_INSTALL_PREFIX=$PREFIX"
+    "-DCMAKE_PREFIX_PATH=$PREFIX"
+    "-DCMAKE_C_COMPILER=$CC"
+    "-DCMAKE_CXX_COMPILER=$CXX"
+    "-DENABLE_MPI=ON"
+    "-DHDF5_DIR=$PREFIX"
+    "-DENABLE_PYTHON=OFF"
+    "-DENABLE_TESTS=OFF"
+  )
+
+  log ""
+  log "Conduit CMake options:"
+  printf '  %q\n' cmake "${opts[@]}" | tee -a "$MANIFEST"
+
+  run_logged "conduit-cmake" cmake "${opts[@]}"
+  run_logged "conduit-build" cmake --build "$build" -j "$JOBS"
+  run_logged "conduit-install" cmake --install "$build"
+}
+
 build_mfem() {
   local src="$SRC_DIR/mfem"
   local build="$BUILD_DIR/mfem"
@@ -216,13 +284,15 @@ build_mfem() {
     "-DCMAKE_PREFIX_PATH=$PREFIX"
     "-DMFEM_USE_MPI=YES"
     "-DMFEM_USE_METIS_5=YES"
+    "-DHDF5_DIR=$PREFIX"
+    "-DMFEM_USE_CONDUIT=YES"
   )
 
   case "$DEVICE" in
     cpu)
       ;;
     cuda)
-      opts+=("-DMFEM_USE_CUDA=YES" "-DMFEM_CUDA_ARCH=$CUDA_ARCH")
+      opts+=("-DMFEM_USE_CUDA=YES" "-DCUDA_ARCH=$CUDA_ARCH")
       ;;
     hip)
       opts+=("-DMFEM_USE_HIP=YES")
@@ -259,6 +329,8 @@ clone_or_update "$THERMO_DATABASE_REPO" "$THERMO_DATABASE_REF" "$SRC_DIR/databas
 clone_or_update "$GKLIB_REPO" "$GKLIB_REF" "$SRC_DIR/GKlib"
 clone_or_update "$METIS_REPO" "$METIS_REF" "$SRC_DIR/METIS"
 clone_or_update "$HYPRE_REPO" "$HYPRE_REF" "$SRC_DIR/hypre"
+clone_or_update "$HDF5_REPO" "$HDF5_REF" "$SRC_DIR/hdf5"
+clone_or_update "$CONDUIT_REPO" "$CONDUIT_REF" "$SRC_DIR/conduit"
 clone_or_update "$MFEM_REPO" "$MFEM_REF" "$SRC_DIR/mfem"
 
 build_plato
@@ -266,6 +338,8 @@ build_thermo_database
 build_gklib
 build_metis
 build_hypre
+build_hdf5
+build_conduit
 build_mfem
 
 record_final_summary

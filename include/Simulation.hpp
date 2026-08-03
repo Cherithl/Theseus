@@ -36,6 +36,7 @@ namespace Theseus
     bool visualize = true;
     bool visit = false;
     bool paraview = true;
+    bool conduit = false;
     bool checkpoint_load = false;
     bool checkpoint_save = false;
   
@@ -96,6 +97,7 @@ namespace Theseus
   
     std::unique_ptr<mfem::ParaViewDataCollection> pd;
     std::unique_ptr<mfem::VisItDataCollection> vd;
+    std::unique_ptr<mfem::ConduitDataCollection> cd;
 
     std::shared_ptr<mfem::ODESolver> ode_solver;
     std::unique_ptr<Theseus::RHSOperatorBase> rhsOp;

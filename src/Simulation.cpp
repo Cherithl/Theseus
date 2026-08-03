@@ -118,7 +118,8 @@ namespace Theseus
         vis_steps = runtime.value("vis_steps", 100);
         paraview = runtime["paraview"].get<bool>();
         visit = runtime["visit"].get<bool>();
-        paraview = !visit; // default to paraview
+        conduit = runtime["conduit"].get<bool>();
+        paraview = !visit && !conduit; // default to paraview
       }
 
     nancheck = runtime["nancheck"].get<bool>();
@@ -1062,6 +1063,24 @@ if (!(bc_props.contains("velocity") && bc_props["velocity"].contains("vector") &
             vd->RegisterField("Blending Coeff", alpha.get());
 #endif
           }
+        else if (conduit)
+          {
+            cd = std::make_unique<mfem::ConduitDataCollection>(pmesh->GetComm(), "Output", pmesh.get());
+            cd->SetPrefixPath(output_file_path);
+            cd->SetPrecision(precision);
+            cd->SetProtocol("hdf5");
+            cd->RegisterField("Density", &rho);
+            cd->RegisterField("U", u.get());
+            if (dim > 1)
+              {
+                cd->RegisterField("V", v.get());
+              if (dim > 2)
+                {
+                  cd->RegisterField("W", w.get());
+                }
+              }
+            cd->RegisterField("Pressure", p.get());
+          }
       }
 
     next_checkpoint_t = t + checkpoint_dt;
@@ -1264,6 +1283,12 @@ if (!(bc_props.contains("velocity") && bc_props["velocity"].contains("vector") &
             vd->SetTime(t);
             vd->Save();
           }
+        else if (conduit)
+          {
+            cd->SetCycle(ti);
+            cd->SetTime(t);
+            cd->Save();
+          }
       }
 
 
@@ -1395,6 +1420,12 @@ if (!(bc_props.contains("velocity") && bc_props["velocity"].contains("vector") &
                 vd->SetCycle(ti);
                 vd->SetTime(t);
                 vd->Save();
+              }
+            else if (conduit)
+              {
+                cd->SetCycle(ti);
+                cd->SetTime(t);
+                cd->Save();
               }
 
 
