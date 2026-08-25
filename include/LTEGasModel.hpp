@@ -208,9 +208,17 @@ namespace Theseus
     }
 
     template<typename InStateView, typename OutStateView>
+    MFEM_HOST_DEVICE
     inline void primitive_to_conserved(const InStateView &prim, OutStateView &cons) const
     {
       return eos.primitive_to_conserved(phys, L, prim, cons, T);
+    }
+
+    template<typename InStateView, typename OutStateView>
+    MFEM_HOST_DEVICE
+    inline void conserved_to_primitive(const InStateView &cons, OutStateView &prim) const
+    {
+      MFEM_ABORT("CL ALERT : Not functional in LTE yet");
     }
 
     // --- Transport -----------------------------------------------------------

@@ -176,7 +176,8 @@ build_hypre() {
     cpu)
       ;;
     cuda)
-      opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH" "--with-umpire-include=${PREFIX}/include" "--with-umpire-lib-dirs=${PREFIX}/lib" "--with-umpire-libs=\"umpire camp\"")
+      # opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH" "--with-umpire-include=${PREFIX}/include" "--with-umpire-lib-dirs=${PREFIX}/lib" "--with-umpire-libs=\"umpire camp\"")
+      opts+=("--with-cuda" "--with-gpu-arch=$CUDA_ARCH" "--without-umpire")
       ;;
     hip)
       opts+=("--with-hip" "--enable-mixedint")
@@ -222,7 +223,7 @@ build_mfem() {
     cpu)
       ;;
     cuda)
-      opts+=("-DMFEM_USE_CUDA=YES" "-DMFEM_CUDA_ARCH=$CUDA_ARCH")
+      opts+=("-DMFEM_USE_CUDA=YES" "-DCUDA_ARCH=$CUDA_ARCH")
       ;;
     hip)
       opts+=("-DMFEM_USE_HIP=YES")
@@ -261,8 +262,8 @@ clone_or_update "$METIS_REPO" "$METIS_REF" "$SRC_DIR/METIS"
 clone_or_update "$HYPRE_REPO" "$HYPRE_REF" "$SRC_DIR/hypre"
 clone_or_update "$MFEM_REPO" "$MFEM_REF" "$SRC_DIR/mfem"
 
-build_plato
-build_thermo_database
+# build_plato
+# build_thermo_database
 build_gklib
 build_metis
 build_hypre

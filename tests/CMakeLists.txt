@@ -127,10 +127,24 @@ target_link_libraries(axisymmetry_config_tests PRIVATE ${THESEUS_MFEM_TARGET} MP
 
 add_test(NAME AxisymmetryConfigTests COMMAND axisymmetry_config_tests)
 
+if(ENABLE_CUDA)
+    set_source_files_properties(
+        axisymmetric_geometry_tests.cpp
+        table_lookup_test.cpp
+        PROPERTIES LANGUAGE CUDA
+    )
+endif()
+
 add_executable(axisymmetric_geometry_tests
    unit_test_main.cpp
    axisymmetric_geometry_tests.cpp
 )
+
+if(ENABLE_CUDA)
+    target_compile_options(axisymmetric_geometry_tests PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr>
+    )
+endif()
 
 target_include_directories(axisymmetric_geometry_tests
     PRIVATE ${PROJECT_SOURCE_DIR}/include
@@ -216,6 +230,12 @@ if(THESEUS_WITH_PLATO)
       unit_test_main.cpp
       table_lookup_test.cpp
    )
+
+   if(ENABLE_CUDA)
+    target_compile_options(axisymmetric_geometry_tests PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr>
+    )
+   endif()
 
    target_compile_definitions(table_lookup_tests PRIVATE USE_PLATO)
 

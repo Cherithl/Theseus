@@ -9,6 +9,7 @@
 #include "AxisymmetricSource.hpp"
 #include "dgsem_cache_utilities.hpp"
 #include "bc_kernels.hpp"
+#include "Utilities.hpp"
 
 namespace Theseus
 {
@@ -388,11 +389,12 @@ namespace Theseus
                 du_subcell[q] = 0.0;
               }
               int id1 = k * Np_y * Np_x + j * Np_x;
-              Kernels::el_gather_state(el_u, npe, neq, id1, state1_local);
+              // Kernels::el_gather_state(el_u, npe, neq, id1, state1_local);
               for (int i = 0; i < Np_x - 1; i++)
                 {
                   int id2 = id1 + 1;
-                  Kernels::el_gather_state(el_u, npe, neq, id2, state2_local);
+                  muscl_rec(ctx.gas, el_u, qWgt, npe, neq, 1, Np_x, i, id1, state1_local, state2_local);
+                  // Kernels::el_gather_state(el_u, npe, neq, id2, state2_local);
                   const mfem::real_t *nor = el_metric_xi + id2*dim;
 
                   max_char_speed = \
@@ -409,9 +411,9 @@ namespace Theseus
                   for(int q = 0; q < neq;q++){
                     du_subcell[q] = flux_num[q];
                   }
-                  for(int q = 0;q < neq;q++){
-                    state1_local[q] = state2_local[q];
-                  }
+                  // for(int q = 0;q < neq;q++){
+                  //   state1_local[q] = state2_local[q];
+                  // }
                   id1 = id2;
                 }
               for(int q = 0;q < neq;q++){
@@ -431,13 +433,14 @@ namespace Theseus
                     du_subcell[q] = 0.0;
                   }
                   int id1 = k * Np_y * Np_x + i;
-                  Kernels::el_gather_state(el_u, npe, neq, id1,
-                                           state1_local);
+                  // Kernels::el_gather_state(el_u, npe, neq, id1,
+                  //                          state1_local);
                   for (int j = 0; j < Np_y - 1; j++)
                     {
                       int id2 = k * Np_y * Np_x + (j + 1) * Np_x + i;
-                      Kernels::el_gather_state(el_u, npe, neq, id2,
-                                               state2_local);
+                      muscl_rec(ctx.gas, el_u, qWgt, npe, neq, Np_x, Np_y, j, id1, state1_local, state2_local);
+                      // Kernels::el_gather_state(el_u, npe, neq, id2,
+                      //                          state2_local);
                       const mfem::real_t *nor = el_metric_eta + id2*dim;
                       max_char_speed = \
                         Kernels::rmax(max_char_speed,
@@ -454,7 +457,7 @@ namespace Theseus
                       Kernels::el_scatter_add(du_subcell, npe, neq, id1, 1.0, el_dudt);
                       for(int q = 0;q < neq;q++){
                         du_subcell[q] = flux_num[q];
-                        state1_local[q] = state2_local[q];
+                        // state1_local[q] = state2_local[q];
                       }
                       id1 = id2;                   
                     }
@@ -474,13 +477,14 @@ namespace Theseus
                         du_subcell[q] = 0.0;
                       }
                       int id1 = j * Np_x + i;
-                      Kernels::el_gather_state(el_u, npe, neq, id1,
-                                               state1_local);
+                      // Kernels::el_gather_state(el_u, npe, neq, id1,
+                      //                          state1_local);
                       for (int k = 0; k < Np_z - 1; k++)
                         {
                           int id2 = (k + 1) * Np_y * Np_x + j * Np_x + i;
-                          Kernels::el_gather_state(el_u, npe, neq, id2,
-                                                   state2_local);
+                          // Kernels::el_gather_state(el_u, npe, neq, id2,
+                          //                          state2_local);
+                          muscl_rec(ctx.gas, el_u, qWgt, npe, neq, Np_x*Np_y, Np_z, k, id1, state1_local, state2_local);
                           const mfem::real_t *nor = el_metric_zeta + id2*dim;
                           max_char_speed = \
                             Kernels::rmax(max_char_speed,
@@ -496,7 +500,7 @@ namespace Theseus
                       
                           for(int q = 0;q < neq;q++){
                             du_subcell[q] = flux_num[q];
-                            state1_local[q] = state2_local[q];
+                            // state1_local[q] = state2_local[q];
                           }
                           id1 = id2;            
                         }

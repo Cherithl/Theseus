@@ -127,4 +127,111 @@ namespace Theseus
         diss[eq] *= nor_mag;
       }
     };
+
+    MFEM_HOST_DEVICE
+    inline mfem::real_t van_Albada_limiter(mfem::real_t m_L, mfem::real_t m_R)
+    {
+      return (m_L*m_R + 1e-12)/(m_L*m_L + m_R*m_R + 1e-12)*(m_L + m_R);
+    };
+
+    MFEM_HOST_DEVICE
+    inline mfem::real_t minmod_limiter(mfem::real_t m_L, mfem::real_t m_R)
+    {
+      if (m_L == 0.0 || m_R == 0.0)
+      {
+          return 0.0;
+      }
+      else if ((m_L > 0.0) != (m_R > 0.0))
+      {
+          return 0.0;
+      }
+      else
+      {
+          return (m_L > 0.0)
+            ? Kernels::rmin(m_L, m_R)
+            : Kernels::rmax(m_L, m_R);
+      }
+    };
+
+    template<typename GasModelT>
+    MFEM_HOST_DEVICE
+    inline void muscl_rec(const GasModelT &gasModel,
+                          const mfem::real_t *u,
+                          const mfem::real_t *wgt,
+                          const int dof, const int num_eq,
+                          const int stride, const int Np,
+                          const int int_id, const int id,
+                          mfem::real_t *state1,
+                          mfem::real_t *state2)
+    {
+
+      mfem::real_t prim_ll[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
+      mfem::real_t prim_rr[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
+      mfem::real_t prim_l[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
+      mfem::real_t prim_r[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
+
+      {
+            PointPrimitiveViewRW P_ll{prim_ll};
+            PointPrimitiveViewRW P_l{prim_l};
+            PointPrimitiveViewRW P_r{prim_r};
+            PointPrimitiveViewRW P_rr{prim_rr};
+
+            Kernels::el_gather_state(u, dof, num_eq, id, state1);
+            Kernels::el_gather_state(u, dof, num_eq, id + stride, state2);
+            Theseus::PointStateView S_l{state1};
+            Theseus::PointStateView S_r{state2};
+            gasModel.conserved_to_primitive(S_r, P_r);
+            gasModel.conserved_to_primitive(S_l, P_l);
+            if(int_id > 0)
+            {
+              Kernels::el_gather_state(u, dof, num_eq, id - stride, state1);
+              Theseus::PointStateView S_ll{state1};
+              gasModel.conserved_to_primitive(S_ll, P_ll);
+            }
+            if(int_id < Np - 2)
+            {
+              Kernels::el_gather_state(u, dof, num_eq, id + 2*stride, state2);
+              Theseus::PointStateView S_rr{state2};
+              gasModel.conserved_to_primitive(S_rr, P_rr);
+            }
+      }
+
+      for (int q = 0; q < num_eq; q++)
+      {
+
+        const mfem::real_t u_l = prim_l[q];
+        const mfem::real_t u_r = prim_r[q];
+
+        const mfem::real_t m_jump = 2.0*(u_r - u_l)/(wgt[int_id] + wgt[int_id+1]);
+
+        mfem::real_t m_l = m_jump;
+        mfem::real_t m_r = m_jump;
+
+        if (int_id > 0)
+        {
+          const mfem::real_t u_ll = prim_ll[q];
+
+          m_l = 2.0*(u_l - u_ll) / (wgt[int_id] + wgt[int_id-1]);
+          m_l = van_Albada_limiter(m_jump, m_l);
+        }
+
+        if (int_id < Np - 2)
+        {
+          const mfem::real_t u_rr = prim_rr[q];
+
+          m_r = 2.0*(u_rr - u_r) / (wgt[int_id+2] + wgt[int_id+1]);
+          m_r = van_Albada_limiter(m_jump, m_r);
+        }
+
+        prim_l[q] = u_l + 0.5*m_l*wgt[int_id];
+        prim_r[q] = u_r - 0.5*m_r*wgt[int_id+1];
+      }
+
+      Theseus::PointStateViewRW Sl{state1};
+      Theseus::PointStateViewRW Sr{state2};
+      Theseus::PointPrimitiveView Pl{prim_l};
+      Theseus::PointPrimitiveView Pr{prim_r};
+      gasModel.primitive_to_conserved(Pl, Sl);
+      gasModel.primitive_to_conserved(Pr, Sr);
+    };
 }

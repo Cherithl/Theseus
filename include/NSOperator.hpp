@@ -36,7 +36,7 @@ namespace Theseus
                std::shared_ptr<const Gas> gasModel_,
                const std::string &gasModelName_,
                const std::string &numFluxName_,
-               const mfem::real_t alpha_max=0.5, const mfem::real_t alpha_min=0.001)
+               const mfem::real_t alpha_max=0.5, const mfem::real_t alpha_min=0.00001)
     : RHSOperator<Physics>(vfes_, fes0_, pmesh_, eta_, alpha_,
                            indicator_, gasModel_, gasModelName_, numFluxName_,
                            "NavierStokes", alpha_max, alpha_min),
