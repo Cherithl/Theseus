@@ -86,6 +86,9 @@ namespace Theseus
       SetTime(time);
     }
 
+    virtual void SetTargetState(const mfem::real_t *target_state, const int dim) = 0;
+    virtual void SetCurrentTime(const mfem::real_t dt) = 0;
+
     IntegralMeasures GetIntegralMeasuresBaseline() const { return diag0; }
 
     inline mfem::real_t GetMaxCharSpeed() const
@@ -165,6 +168,20 @@ namespace Theseus
     void CheckIndicatorSmoothness() const;
     void ComputeIndicatorField(const mfem::Vector &u) const;
 #endif
+
+    inline void SetTargetState(const mfem::real_t *target_state, const int dim) override
+    {
+      auto *ts = operator_cache.target_state.HostReadWrite();
+      ts[0] = target_state[0];
+      ts[1] = target_state[1];
+      ts[dim+1] = target_state[dim+1];
+      operator_cache.target_state.Read();
+    }
+
+    inline void SetCurrentTime(const mfem::real_t dt) override
+    {
+      operator_cache.current_dt = dt;
+    }
 
     void Mult(const mfem::Vector &u, mfem::Vector &dudt) const override;
     void ComputeIntegralMeasures(const mfem::Vector &u, Theseus::IntegralMeasures &diag) const override;

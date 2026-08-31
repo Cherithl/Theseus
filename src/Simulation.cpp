@@ -765,7 +765,8 @@ namespace Theseus
                   std::string tempBC_key = bc_props["temperature"]["scalar"].get<std::string>();
                   // std::string state_key = bc_props["vector"].get<std::string>();
                   auto vel_bc = Prandtl::ConditionFactory::Instance().GetVectorBoundaryCondition(velBC_key);
-                  auto temp_bc = Prandtl::ConditionFactory::Instance().GetScalarBoundaryCondition(tempBC_key);
+                  // auto temp_bc = Prandtl::ConditionFactory::Instance().GetScalarBoundaryCondition(tempBC_key); // CL NOTE : Take a value rather than hardcoding
+                  auto temp_bc = bc_props["temperature"]["value"].get<mfem::real_t>();
 
                   mfem::Vector bc_data(vel_bc.Size() + 1);
                   std::ostringstream Ostr;
@@ -976,6 +977,11 @@ namespace Theseus
     // Set up the operator cache
     rhsOp->SetBCDescriptorData(bc_descriptors, bc_scalar_data, bc_vector_data);
     rhsOp->Finalize(t);
+
+#ifdef SOURCE_TERMS
+    mfem::real_t target_state[Theseus::MAXEQ] = {1.0, 496.9751, 0.0, 0.0, 196019.26875};
+    rhsOp->SetTargetState(target_state, dim);
+#endif
 
     if(myRank == 0 && debug_simulation){
       std::cout << "Theseus RHS Operator finalized." << std::endl;
@@ -1246,7 +1252,9 @@ namespace Theseus
 
           // Compute the time step size
           dt_real = std::min(dt, t_final - t);
-
+#ifdef SOURCE_TERMS
+          rhsOp->SetCurrentTime(dt_real);
+#endif
           // Perform the time step
           if(ti > 1){
             timestep_timer.Start();

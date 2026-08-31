@@ -167,7 +167,7 @@ namespace Theseus
       const int ener_eq = gasModel.L.eq_energy;
 
       // Dissipative part of the flux based on Roe's approximate Riemann solver
-      Roe_dissipation(gasModel, S1, S2, nor, diss);
+      Utilities::Roe_dissipation(gasModel, S1, S2, nor, diss);
       
       flux[mass_eq] = rho_ln * vn - diss[mass_eq];
       for (int d = 0; d < dim; d++)

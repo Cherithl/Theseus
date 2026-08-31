@@ -997,6 +997,10 @@ namespace Theseus
     });
 #endif
 
+#ifdef SOURCE_TERMS
+    Source::PreProcessSourceTerms(dc, operator_cache, Ue_d, this->pmesh->GetComm());
+#endif
+
     // Inside the FORALL below, executed on device
     mfem::forall(ne, [=] MFEM_HOST_DEVICE (int e)
     {
@@ -1046,6 +1050,10 @@ namespace Theseus
 #endif
       AddAxisymmetricEulerElementSource(
                                         dc, u_el, radius_el, jac_el, metric_el, du_el);
+#ifdef SOURCE_TERMS
+      Source::AddSourceTerms(dc, u_el, du_el);
+#endif
+
 #ifdef POINT_PARALLEL_VOLUME
       ws_d[e*ndof] = cs_el;
 #else

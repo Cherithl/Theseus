@@ -211,7 +211,62 @@ namespace Prandtl
   // Global static instance to ensure registration happens at startup.
   static RegisterCompressibleTaylorGreenVortex regCompressibleTaylorGreenVortex;
 
+  // Streamwise Parabolic initial condition
+  std::function<void(const mfem::Vector&, mfem::Vector&)> StreamwiseParabolicIC(mfem::real_t Ma) // CL ALERT : Decide on parameters
+  {
+    return [Ma] (const mfem::Vector &x, mfem::Vector &y)
+    {
+      mfem::real_t gamma = 1.4;
+      mfem::real_t R = 287.05, Tw = 273.15;
+      mfem::real_t Uref = Ma*std::sqrt(gamma*R*Tw);
 
+      mfem::real_t rho = 1.0;
+      mfem::real_t p = rho*R*Tw;
+
+      mfem::real_t parabolic_fac = 1.0 - x(1)*x(1);
+
+      mfem::real_t u = 1.5*Uref*parabolic_fac;
+      mfem::real_t v = 0.0;
+      mfem::real_t w = 0.0;
+
+      // Add random perturbation to the velocity components
+      const mfem::real_t ru =2.0 * std::rand() /static_cast<mfem::real_t>(RAND_MAX) - 1.0;
+      const mfem::real_t rv =2.0 * std::rand() /static_cast<mfem::real_t>(RAND_MAX) - 1.0;
+      const mfem::real_t rw =2.0 * std::rand() /static_cast<mfem::real_t>(RAND_MAX) - 1.0;
+      mfem::real_t Amp = 0.1*u;
+      u += Amp * ru;
+      v += Amp * rv;
+      w += Amp * rw;
+      mfem::real_t energy = p / (gamma - 1.0) + 0.5 * rho * (u * u + v * v + w * w);
+
+      // Streamwise rollers are commented out
+      // v += 0.1 * std::sin(2.0 * M_PI * x(0));
+      // w += 0.1 * std::sin(2.0 * M_PI * x(0));
+      y(0) = rho;
+      y(1) = rho*u;
+      y(2) = rho*v;
+      y(3) = rho*w;
+      y(4) = energy;
+    };
+  }
+
+  // 3D No Slip velocity boundary condition vector for walls
+  const Prandtl::BC_Vector NoSlipWallVelBCVector_3D({0.0, 0.0, 0.0});
+
+  // Registration helper that automatically registers these functions
+  struct RegisterChannelFlow
+  {
+    RegisterChannelFlow()
+    {
+      // Register initial condition
+      Prandtl::ConditionFactory::Instance().RegisterInitialCondition1("StreamwiseParabolicIC", StreamwiseParabolicIC);
+
+      // Register 3D No Slip velocity boundary condition vector for walls
+      Prandtl::ConditionFactory::Instance().RegisterVectorBoundaryCondition("NoSlipWallVelBCVector_3D", NoSlipWallVelBCVector_3D);
+    }
+  };
+  // Global static instance to ensure registration happens at startup.
+  static RegisterChannelFlow regChannelFlow;
 
   // Taylor Green Vortex initial condition
   std::function<void(const mfem::Vector&, mfem::Vector&)> TaylorGreenVortex2DIC(mfem::real_t gamma, mfem::real_t Ma)

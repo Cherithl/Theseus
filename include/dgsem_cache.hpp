@@ -42,6 +42,7 @@ namespace Theseus
     int ndof_scalar_el = 0;
     int num_face_points = 0;
     int num_interior_faces = 0;
+    mfem::real_t total_volume = 0.0;
     bool axisymmetric = AxisymmetricGeometry::enabled;
 
     // Host Only: Integration rules, operators, restrictions
@@ -128,6 +129,12 @@ namespace Theseus
     InviscidFlux iflux;
     std::unique_ptr<Theseus::LTETable::Data> lteTableData;
 
+    // Target state source term data
+    bool use_target_state_source = true; // CL ALERT : Find a way to enable this currently setting it to true
+    mfem::Vector target_state = mfem::Vector(Theseus::MAXEQ);
+    mfem::Vector volume_avg_state = mfem::Vector(Theseus::MAXEQ);
+    mfem::real_t current_dt = 0.0;
+
 #ifdef SUBCELL_FV_BLENDING
     mfem::Vector subcellMetricXi;
     mfem::Vector subcellMetricEta;
@@ -182,6 +189,7 @@ namespace Theseus
     int Np = 0;
     int num_attr = 0;
     int num_bcs = 0;
+    mfem::real_t total_volume = 0.0;
     bool axisymmetric = AxisymmetricGeometry::enabled;
 
     // Volume elements
@@ -218,6 +226,12 @@ namespace Theseus
     mfem::real_t *bndWaveSpeed_d = nullptr;
     Gas gas;
     InviscidFlux iflux;
+
+    // Target state source term data
+    bool use_target_state_source = true; // CL ALERT : Find a way to enable this currently setting it to true
+    const mfem::real_t *target_state_d = nullptr;
+    const mfem::real_t *volume_avg_state_d = nullptr;
+    mfem::real_t tau_inv = 0.0;
 
 #ifdef SUBCELL_FV_BLENDING
     const mfem::real_t *subcell_metric_xi_d = nullptr;

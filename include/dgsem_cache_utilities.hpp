@@ -41,7 +41,9 @@ namespace Theseus {
 
     MFEM_VERIFY(fes, "fes must be set");
     mfem::Mesh *mesh = fes->GetMesh();
+    auto *pmesh = dynamic_cast<mfem::ParMesh*>(mesh);
     MFEM_VERIFY(mesh, "mesh must be set");
+    MFEM_VERIFY(pmesh, "need ParMesh");
     const int p = fes->GetFE(0)->GetOrder();
     const int dim = mesh->SpaceDimension();
     const int Np = p + 1; // num 1d quadrature points
@@ -61,6 +63,13 @@ namespace Theseus {
     cache->num_elements = ne;
     cache->ndof_scalar_el = num_dofs_per_eqn_per_element;
     cache->num_equations = num_eqns;
+
+    mfem::real_t local_volume = 0.0;
+    for (int e=0; e < ne; e++)
+    {
+      local_volume += mesh->GetElementVolume(e);
+    }
+    MPI_Allreduce(&local_volume, &cache->total_volume, 1, mfem::MPITypeMap<mfem::real_t>::mpi_type, MPI_SUM, pmesh->GetComm());
   }
 
   template<typename CacheT>
@@ -769,6 +778,7 @@ namespace Theseus {
     device_cache.Np_z = cache.Np_z;
     device_cache.num_elements = cache.num_elements;
     device_cache.num_equations = cache.num_equations;
+    device_cache.total_volume = cache.total_volume;
     device_cache.axisymmetric = cache.axisymmetric;
 
     // - Volume element data
@@ -804,6 +814,12 @@ namespace Theseus {
     // POD gas model
     device_cache.gas = cache.gas.to_device(cache);
     device_cache.iflux = cache.iflux;
+
+    // Body force data
+    cache.target_state = 0.0;
+    cache.volume_avg_state = 0.0;
+    device_cache.target_state_d = cache.target_state.Read();
+    device_cache.volume_avg_state_d = cache.volume_avg_state.Read();
 
 #ifdef SUBCELL_FV_BLENDING
     device_cache.subcell_metric_xi_d = cache.subcellMetricXi.Read();

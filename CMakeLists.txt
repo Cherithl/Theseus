@@ -24,6 +24,7 @@ option(ENABLE_CUDA "Compile CUDA kernels" OFF)
 option(THESEUS_WITH_PLATO "Enable PLATO API for thermo tables" OFF)
 set(ENABLE_POINT_PARALLEL_INTERIOR_FACES ON)
 set(ENABLE_POINT_PARALLEL_VOLUME ON)
+option(SOURCE_TERMS "Enable Source terms" OFF)
 ## NOTE: PLATO_DB_PATH can be specified at build-time to customize
 ##       the location of the database used by PLATO. Tries to default
 ##       to a reasonable location.
