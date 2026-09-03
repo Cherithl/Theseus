@@ -31,13 +31,12 @@ namespace Theseus
 
       source[0] = (target_state[0] - volume_avg_state[0])*dc.tau_inv;
       source[1] = (target_state[1] - volume_avg_state[1])*dc.tau_inv;
-      source[dim+1] = (target_state[dim+1] - volume_avg_state[dim+1])*dc.tau_inv;
 
       for(int point =0; point < dof; point++)
       {
         Kernels::el_gather_state(Ue, dof, neq, point, state);
         PointStateView S{state};
-        source[dim+1] += gas.velocity(S,0) * source[1];
+        source[dim+1] = (target_state[dim+1] - volume_avg_state[dim+1])*dc.tau_inv + gas.velocity(S,0) * source[1];
         Kernels::el_scatter_add(source, dof, neq, point, 1.0, dUe);
       }
     };
