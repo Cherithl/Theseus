@@ -1030,6 +1030,7 @@ namespace Theseus
         if (paraview)
           {
             pd = std::make_unique<mfem::ParaViewDataCollection>(paraview_folder, pmesh.get());
+            pd->UseRestartMode(checkpoint_config.LoadEnabled());
             pd->SetPrefixPath(output_file_path);
             if (visualization_config.Has(VisualizationField::density))
               {
