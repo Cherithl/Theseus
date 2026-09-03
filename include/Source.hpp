@@ -36,7 +36,8 @@ namespace Theseus
       {
         Kernels::el_gather_state(Ue, dof, neq, point, state);
         PointStateView S{state};
-        source[dim+1] = (target_state[dim+1] - volume_avg_state[dim+1])*dc.tau_inv + gas.velocity(S,0) * source[1];
+        // source[dim+1] = (target_state[dim+1] - volume_avg_state[dim+1])*dc.tau_inv + gas.velocity(S,0) * source[1];
+        source[dim+1] = gas.velocity(S,0) * source[1];
         Kernels::el_scatter_add(source, dof, neq, point, 1.0, dUe);
       }
     };
@@ -47,7 +48,7 @@ namespace Theseus
       if(dc.use_target_state_source)
       {
         Utilities::ComputeVolumeAverages(dc, op_cache, Ue_d, comm);
-        const mfem::real_t alpha = 0.3; // CL ALERT : This is a tuning parameter for the target state source term
+        const mfem::real_t alpha = 0.5; // CL ALERT : This is a tuning parameter for the target state source term
         dc.tau_inv = 1.0 / (alpha *op_cache.current_dt);
       }
     };
