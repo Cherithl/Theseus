@@ -27,7 +27,7 @@ namespace Theseus
       const mfem::real_t *target_state = dc.target_state_d;
 
       mfem::real_t state[Theseus::MAXEQ];
-      mfem::real_t source[Theseus::MAXEQ];
+      mfem::real_t source[Theseus::MAXEQ] = {0.0, 0.0, 0.0, 0.0, 0.0};
 
       source[0] = (target_state[0] - volume_avg_state[0])*dc.tau_inv;
       source[1] = (target_state[1] - volume_avg_state[1])*dc.tau_inv;
@@ -48,7 +48,7 @@ namespace Theseus
       if(dc.use_target_state_source)
       {
         Utilities::ComputeVolumeAverages(dc, op_cache, Ue_d, comm);
-        const mfem::real_t alpha = 0.5; // CL ALERT : This is a tuning parameter for the target state source term
+        const mfem::real_t alpha = 0.7; // CL ALERT : This is a tuning parameter for the target state source term
         dc.tau_inv = 1.0 / (alpha *op_cache.current_dt);
       }
     };

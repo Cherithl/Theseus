@@ -190,6 +190,13 @@ if(AXISYMMETRIC)
   target_compile_definitions(theseus PRIVATE AXISYMMETRIC)
 endif()
 
+if(SOURCE_TERMS)
+  message(STATUS "Building ${PROJECT_NAME} with: Source terms enabled")
+  target_compile_definitions(theseus PRIVATE SOURCE_TERMS)
+else()
+  message(STATUS "Building ${PROJECT_NAME} with: Source terms OFF")
+endif()
+
 # -------------------------------------------------------------------------------
 # Target-local sanitizers for a single executable (Clang/AppleClang/GNU)
 # -------------------------------------------------------------------------------
