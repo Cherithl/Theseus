@@ -979,7 +979,8 @@ namespace Theseus
     rhsOp->Finalize(t);
 
 #ifdef SOURCE_TERMS
-    mfem::real_t target_state[Theseus::MAXEQ] = {1.0, 496.9751, 0.0, 0.0, 196019.26875};
+    mfem::real_t u_target = 1.5*std::sqrt(1.4 * physicsConstants.R_gas * 293.15);
+    mfem::real_t target_state[Theseus::MAXEQ] = {1.0, u_target, 0.0, 0.0, 196019.26875};
     rhsOp->SetTargetState(target_state, dim);
 #endif
 
