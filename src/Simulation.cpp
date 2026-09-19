@@ -581,6 +581,7 @@ namespace Theseus
 
     const auto &gasModel = rhsOp->GetGasModelInterface();
     auto stateLayout = gasModel.layout();
+    auto physicsConstants = gasModel.phys();
 
     mfem::Vector bc_vector_data;
     mfem::Vector bc_scalar_data;
@@ -790,7 +791,8 @@ namespace Theseus
                   std::string tempBC_key = bc_props["temperature"]["scalar"].get<std::string>();
                   // std::string state_key = bc_props["vector"].get<std::string>();
                   auto vel_bc = Prandtl::ConditionFactory::Instance().GetVectorBoundaryCondition(velBC_key);
-                  auto temp_bc = Prandtl::ConditionFactory::Instance().GetScalarBoundaryCondition(tempBC_key);
+                  // auto temp_bc = Prandtl::ConditionFactory::Instance().GetScalarBoundaryCondition(tempBC_key);
+                  auto temp_bc = bc_props["temperature"]["value"].get<mfem::real_t>(); 
 
                   mfem::Vector bc_data(vel_bc.Size() + 1);
                   std::ostringstream Ostr;
@@ -1001,6 +1003,12 @@ namespace Theseus
     // Set up the operator cache
     rhsOp->SetBCDescriptorData(bc_descriptors, bc_scalar_data, bc_vector_data);
     rhsOp->Finalize(t);
+
+#ifdef SOURCE_TERMS
+    mfem::real_t u_target = 1.5*std::sqrt(1.4 * physicsConstants.R_gas * 293.15);
+    mfem::real_t target_state[Theseus::MAXEQ] = {1.0, u_target, 0.0, 0.0, 196019.26875};
+    rhsOp->SetTargetState(target_state, dim);
+#endif
 
     if(myRank == 0 && debug_simulation){
       std::cout << "Theseus RHS Operator finalized." << std::endl;
@@ -1241,7 +1249,9 @@ namespace Theseus
             ? next_checkpoint_t : mfem::infinity();
           dt_real = LimitTimeStepToEvents(dt, t,
                                           {t_final, next_visualization, next_checkpoint});
-
+#ifdef SOURCE_TERMS
+          rhsOp->SetCurrentTime(dt_real);
+#endif
           // Perform the time step
           if(ti > 1){
             timestep_timer.Start();

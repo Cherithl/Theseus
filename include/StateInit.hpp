@@ -171,9 +171,111 @@ namespace Prandtl
   // Global static instance to ensure registration happens at startup.
   static RegisterTaylorGreenVortex regTaylorGreenVortex;
 
+  // Compressible Taylor Green Vortex initial condition
+  std::function<void(const mfem::Vector&, mfem::Vector&)> CompressibleTaylorGreenVortexIC(mfem::real_t Ma)
+  {
+    return [Ma](const mfem::Vector &x, mfem::Vector &y)
+    {
+      MFEM_ASSERT(x.Size() == 3, "");
 
+      mfem::real_t rho, rho0, U0, velX, velY, velZ, energy, p;
+      mfem::real_t p0 = 1.0e5, T0 = 273.15, R = 287.05, gamma = 1.4;
 
+      rho0 = p0/(R*T0);
+      U0   = Ma*std::sqrt(gamma*R*T0);
 
+      velX =  U0 * std::sin(x(0)) * std::cos(x(1)) * std::cos(x(2));
+      velY = -U0 * std::cos(x(0)) * std::sin(x(1)) * std::cos(x(2));
+      velZ =  0.0;
+      p    = p0 + (rho0 * U0 * U0) / 16.0 * (std::cos(2.0 * x(0)) + std::cos(2.0 * x(1))) * (std::cos(2.0 * x(2)) + 2);
+      rho  = p / (R * T0);
+      energy = p / (gamma - 1.0) + 0.5 * rho * (velX * velX + velY * velY + velZ * velZ);
+
+      y(0) = rho;
+      y(1) = rho * velX;
+      y(2) = rho * velY;
+      y(3) = rho * velZ;
+      y(4) = energy;
+    };
+  }
+
+  // Registration helper that automatically registers these functions
+  struct RegisterCompressibleTaylorGreenVortex
+  {
+    RegisterCompressibleTaylorGreenVortex()
+    {
+      // Register initial condition
+      Prandtl::ConditionFactory::Instance().RegisterInitialCondition1("CompressibleTaylorGreenVortexIC", CompressibleTaylorGreenVortexIC);
+    }
+  };
+  // Global static instance to ensure registration happens at startup.
+  static RegisterCompressibleTaylorGreenVortex regCompressibleTaylorGreenVortex;
+
+  // Streamwise Parabolic initial condition
+  std::function<void(const mfem::Vector&, mfem::Vector&)> StreamwiseParabolicIC(mfem::real_t Ma) // CL ALERT : Decide on parameters
+  {
+    return [Ma] (const mfem::Vector &x, mfem::Vector &y)
+    {
+      mfem::real_t gamma = 1.4;
+      mfem::real_t R = 287.05, Tw = 293.15;
+      mfem::real_t Uref = Ma*std::sqrt(gamma*R*Tw);
+
+      mfem::real_t rho = 1.0;
+      mfem::real_t p = rho*R*Tw;
+
+      mfem::real_t parabolic_fac = 1.0 - x(1)*x(1);
+
+      mfem::real_t u = 1.5*Uref*parabolic_fac;
+      mfem::real_t v = 0.0;
+      mfem::real_t w = 0.0;
+
+      // Add random perturbation to the velocity components
+      const mfem::real_t ru = 2.0*std::rand()/static_cast<mfem::real_t>(RAND_MAX) - 1.0;
+      const mfem::real_t rv = 2.0*std::rand()/static_cast<mfem::real_t>(RAND_MAX) - 1.0;
+      const mfem::real_t rw = 2.0*std::rand()/static_cast<mfem::real_t>(RAND_MAX) - 1.0;
+
+      mfem::real_t Amp = 0.1*u;
+      u += Amp*ru;
+      v += Amp*rv;
+      w += Amp*rw;
+
+      // Add coherent streamwise-vortex / streak perturbation
+      const mfem::real_t X = x(0), Y = x(1), Z = x(2);
+      const mfem::real_t kx = 2.0*M_PI/4.0, kz = 2.0*M_PI/2.0;
+      const mfem::real_t f = 1.0 - Y*Y, f2 = f*f, df2 = -4.0*Y*f;
+      const mfem::real_t Au = 0.05, Avw = 0.05;
+
+      u += Au*Uref*f2*std::cos(kx*X)*std::cos(kz*Z);
+      v += Avw*Uref*f2*std::cos(kx*X)*std::cos(kz*Z);
+      w -= Avw*Uref/kz*df2*std::cos(kx*X)*std::sin(kz*Z);
+
+      mfem::real_t energy = p / (gamma - 1.0) + 0.5 * rho * (u * u + v * v + w * w);
+
+      y(0) = rho;
+      y(1) = rho*u;
+      y(2) = rho*v;
+      y(3) = rho*w;
+      y(4) = energy;
+    };
+  }
+
+  // 3D No Slip velocity boundary condition vector for walls
+  const Prandtl::BC_Vector NoSlipWallVelBCVector_3D({0.0, 0.0, 0.0});
+
+  // Registration helper that automatically registers these functions
+  struct RegisterChannelFlow
+  {
+    RegisterChannelFlow()
+    {
+      // Register initial condition
+      Prandtl::ConditionFactory::Instance().RegisterInitialCondition1("StreamwiseParabolicIC", StreamwiseParabolicIC);
+
+      // Register 3D No Slip velocity boundary condition vector for walls
+      Prandtl::ConditionFactory::Instance().RegisterVectorBoundaryCondition("NoSlipWallVelBCVector_3D", NoSlipWallVelBCVector_3D);
+    }
+  };
+  // Global static instance to ensure registration happens at startup.
+  static RegisterChannelFlow regChannelFlow;
 
   // Taylor Green Vortex initial condition
   std::function<void(const mfem::Vector&, mfem::Vector&)> TaylorGreenVortex2DIC(mfem::real_t gamma, mfem::real_t Ma)

@@ -8,6 +8,7 @@
 #include "mfem.hpp"
 #include "NavierStokesFlux.hpp"
 #include "theseus_kernels.hpp"
+#include "Utilities.hpp"
 
 namespace Theseus
 {
@@ -104,18 +105,13 @@ namespace Theseus
     
       const mfem::real_t rho1 = gasModel.density(S1);
       const mfem::real_t rho2 = gasModel.density(S2);
-      const mfem::real_t rho_mean = 0.5 * (rho1 + rho2);
       const mfem::real_t rho_ln = Kernels::ComputeLogMean(rho1, rho2, 1e-4);
-      const mfem::real_t drho = rho2 - rho1;
       mfem::real_t mom[3] = {0.0, 0.0, 0.0};
       mfem::real_t mom1[3] = {0.0, 0.0, 0.0};
       mfem::real_t mom2[3] = {0.0, 0.0, 0.0};
       mfem::real_t hhat = 0.0;
-      mfem::real_t diss = 0.0;
       mfem::real_t vn = 0.0;
-      mfem::real_t vn1 = 0.0;
-      mfem::real_t vn2 = 0.0;
-      mfem::real_t nor_norm_squared = 0.0;
+      mfem::real_t diss[Theseus::MAXEQ] = {0.0, 0.0, 0.0, 0.0, 0.0};
 
       for(int idim = 0;idim < dim;idim++){
         mom1[idim] = gasModel.momentum(S1, idim);
@@ -125,20 +121,11 @@ namespace Theseus
         const mfem::real_t vbar = 0.5 * (v1 + v2);
         const mfem::real_t dv = v2 - v1;
         vn += vbar * nor[idim];
-        vn1 += v1 * nor[idim];
-        vn2 += v2 * nor[idim];
-        nor_norm_squared += nor[idim] * nor[idim];
         mom[idim] = rho_ln * vbar;
         hhat += -0.25 * (v1*v1 + v2*v2) + vbar * vbar;
-        diss += 0.5 * drho * v1*v2 + rho_mean * dv * vbar;
       }
       const mfem::real_t p1 = gasModel.pressure(S1);
       const mfem::real_t p2 = gasModel.pressure(S2);
-
-      const mfem::real_t nor_norm = Kernels::rsqrt(nor_norm_squared);
-      const mfem::real_t lambda_max = Kernels::rmax(
-        Kernels::rabs(vn1) + gasModel.sound_speed(S1) * nor_norm,
-        Kernels::rabs(vn2) + gasModel.sound_speed(S2) * nor_norm);
 
       const mfem::real_t beta1 = 0.5 * rho1 / p1;
       const mfem::real_t beta2 = 0.5 * rho2 / p2;
@@ -153,18 +140,20 @@ namespace Theseus
       const mfem::real_t gm1_av_inv = 2.0/(gm11 + gm12 - 2.0);
       
       hhat += 0.5 / beta_ln * gm1_av_inv + p_hat / rho_ln;
-      diss += 0.5 * drho * gm1_av_inv / beta_ln + 0.5 * rho_mean * gm1_av_inv * (1.0 / beta2 - 1.0 / beta1);
       const int mass_eq = gasModel.L.eq_mass;
       const int mom0_eq = gasModel.L.eq_mom0;
       const int ener_eq = gasModel.L.eq_energy;
+
+      // Dissipative part of the flux based on Roe's approximate Riemann solver
+      Utilities::Roe_dissipation(gasModel, S1, S2, nor, diss);
       
-      flux[mass_eq] = rho_ln * vn - 0.5 * lambda_max * (rho2 - rho1);
+      flux[mass_eq] = rho_ln * vn - diss[mass_eq];
       for (int d = 0; d < dim; d++)
         {
           flux[mom0_eq + d] = vn * mom[d] + p_hat * nor[d]
-            - 0.5 * lambda_max * (mom2[d]-mom1[d]);
+            - diss[mom0_eq + d];
         }
-      flux[ener_eq] = rho_ln * vn * hhat - 0.5 * lambda_max * diss;
+      flux[ener_eq] = rho_ln * vn * hhat - diss[ener_eq];
       
     }
     struct InviscidFlux {
