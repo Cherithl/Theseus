@@ -168,7 +168,7 @@ namespace Theseus
  
     template<typename StateView>
     MFEM_HOST_DEVICE
-    inline mfem::real_t entropy(const StateView &S)
+    inline mfem::real_t entropy(const StateView &S) const
     {
       return eos.entropy(phys, L, S);
     }
@@ -248,6 +248,9 @@ namespace Theseus
     virtual mfem::real_t temperature(const Theseus::DofStateView &S) const {
       MFEM_ABORT("GasModelInterface::temperature called on base class.");
     }
+    virtual mfem::real_t entropy(const Theseus::DofStateView &S) const {
+      MFEM_ABORT("GasModelInterface::entropy called on base class.");
+    }
     virtual const Theseus::StateLayout& layout() const {
       MFEM_ABORT("GasModelInterface::layout called on base class.");
     }
@@ -283,6 +286,11 @@ namespace Theseus
     mfem::real_t temperature(const Theseus::DofStateView &S) const override
     {
       return gas->temperature(S);
+    }
+
+    mfem::real_t entropy(const Theseus::DofStateView &S) const override
+    {
+      return gas->entropy(S);
     }
 
     const Theseus::StateLayout& layout() const override

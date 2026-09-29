@@ -93,6 +93,7 @@ namespace Theseus
 
     std::unique_ptr<mfem::ParGridFunction> velocity;
     std::unique_ptr<mfem::ParGridFunction> p;
+    std::unique_ptr<mfem::ParGridFunction> entropy;
 
     std::unique_ptr<mfem::ParaViewDataCollection> pd;
     std::unique_ptr<mfem::VisItDataCollection> vd;

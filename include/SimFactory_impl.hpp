@@ -12,7 +12,9 @@
 #include "EulerOperator.hpp"
 #include "NSOperator.hpp"
 #include "LaxFriedrichsFlux.hpp"
+#include "ModifiedLaxFriedrichsFlux.hpp"
 #include "ChandrashekarFlux.hpp"
+#include "RanochaFlux.hpp"
 #include "HLLFlux.hpp"
 #include "RoeFlux.hpp"
 #include "LTETable.hpp"
@@ -91,6 +93,9 @@ namespace Theseus {
       inv_flux_string == "chandrashekar" ||
       starts_with(inv_flux_string, "chan");
 
+    const bool use_ranocha =       
+      inv_flux_string == "ranocha";
+
     const bool use_hll =
       inv_flux_string == "hll";
 
@@ -103,6 +108,12 @@ namespace Theseus {
       inv_flux_string == "laxfriedrichs" ||
       inv_flux_string == "lax_friedrichs" ||
       starts_with(inv_flux_string, "lax");
+
+    const bool use_mllf =
+      inv_flux_string == "mllf" ||
+      inv_flux_string == "modifiedllf" ||
+      inv_flux_string == "modified_lax_friedrichs" ||
+      starts_with(inv_flux_string, "modi");
 
     const bool viscous =
       starts_with(flow_model_string, "visc") ||
@@ -137,6 +148,17 @@ namespace Theseus {
                                                                          indicator, alpha_max, gas_model,
                                                                          gasModelName, numFluxName);
           }
+        if (use_ranocha)
+          {
+            std::string numFluxName("Ranocha");
+            using Physics =
+              Theseus::PhysicsTraits<Theseus::IdealGasModel,
+                                     Theseus::RanochaFlux::InviscidFlux>;
+            return MakeTypedRHSOperator<Physics, Theseus::IdealGasModel>(inviscid, runtime,
+                                                                         vfes, fes0, pmesh, eta, alpha, grad_u,
+                                                                         indicator, alpha_max, gas_model,
+                                                                         gasModelName, numFluxName);
+          }
         else if (use_hll)
           {
             std::string numFluxName("HLL");
@@ -161,6 +183,18 @@ namespace Theseus {
                                                                          indicator, alpha_max, gas_model,
                                                                          gasModelName, numFluxName);
           }
+        else if (use_mllf)
+          {
+            std::string numFluxName("ModifiedLLF");
+            using Physics =
+              Theseus::PhysicsTraits<Theseus::IdealGasModel,
+                                     Theseus::ModifiedLaxFriedrichsFlux::InviscidFlux>;
+
+            return MakeTypedRHSOperator<Physics, Theseus::IdealGasModel>(inviscid, runtime,
+                                                                         vfes, fes0, pmesh, eta, alpha, grad_u,
+                                                                         indicator, alpha_max, gas_model,
+                                                                         gasModelName, numFluxName);
+          }
         else if (use_roe)
           {
             std::string numFluxName("Roe");
@@ -176,7 +210,7 @@ namespace Theseus {
         else {
           std::cerr << "Error: Invalid Numerical Flux Type specified: "
                     << inv_flux_string << "\n"
-                    << "Supported: Chandrashekar, LLF/LFR, HLL, Roe"
+                    << "Supported: Chandrashekar, Ranocha, LLF/LFR, HLL, Roe"
                     << std::endl;
           return nullptr;
         }
@@ -268,6 +302,19 @@ namespace Theseus {
           std::cerr << "Error: Cannot use Chandrashekar flux with LTE" << std::endl;
           return nullptr;
         }
+      if (use_ranocha)
+        {
+          std::string numFluxName("Ranocha");
+          using Physics =
+            Theseus::PhysicsTraits<Theseus::LTEGas,
+                                   Theseus::RanochaFlux::InviscidFlux>;
+          // return MakeTypedRHSOperator<Physics>(inviscid, runtime,
+          //                                   vfes, fes0, pmesh, eta, alpha, grad_u,
+          //                                     indicator, alpha_max, gas_model,
+          //                                     gasModelName, numFluxName);
+          std::cerr << "Error: Cannot use Ranocha flux with LTE" << std::endl;
+          return nullptr;
+        }
       else if (use_hll)
         {
           std::string numFluxName("HLL");
@@ -304,7 +351,7 @@ namespace Theseus {
       else {
         std::cerr << "Error: Invalid Numerical Flux Type specified: "
                   << inv_flux_string << "\n"
-                  << "Supported: Chandrashekar, LLF/LFR, HLL"
+                  << "Supported: Chandrashekar, Ranocha, LLF/LFR, HLL"
                   << std::endl;
         return nullptr;
       }

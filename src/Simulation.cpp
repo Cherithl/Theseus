@@ -1062,6 +1062,11 @@ namespace Theseus
               {
                 pd->RegisterField("Pressure", p.get());
               }
+            if (visualization_config.Has(VisualizationField::entropy))
+              {
+                entropy = std::make_unique<mfem::ParGridFunction>(fes.get());
+                pd->RegisterField("Entropy", entropy.get());
+              }
 #ifdef SUBCELL_FV_BLENDING
             if (visualization_config.Has(VisualizationField::blending_coefficient))
               {
@@ -1438,6 +1443,10 @@ namespace Theseus
         if (visualization_config.Has(VisualizationField::pressure))
           {
             (*p)(i) = gasModel.pressure(dofState);
+          }
+        if (visualization_config.Has(VisualizationField::entropy))
+          {
+            (*entropy)(i) = gasModel.entropy(dofState);
           }
       }
   }

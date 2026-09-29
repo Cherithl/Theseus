@@ -21,6 +21,7 @@ namespace Theseus
     density,
     velocity,
     pressure,
+    entropy,
     blending_coefficient
   };
 
@@ -42,11 +43,12 @@ namespace Theseus
     std::vector<VisualizationField> fields_;
     VisualizationMeshMode mesh_mode_ = VisualizationMeshMode::gll_subcells;
 
-    static constexpr std::array<VisualizationFieldSpec, 4> field_registry_
+    static constexpr std::array<VisualizationFieldSpec, 5> field_registry_
     {{
       {VisualizationField::density, "density"},
       {VisualizationField::velocity, "velocity"},
       {VisualizationField::pressure, "pressure"},
+      {VisualizationField::entropy, "entropy"},
       {VisualizationField::blending_coefficient, "blending_coefficient"}
     }};
 
@@ -58,7 +60,7 @@ namespace Theseus
         {
           throw std::invalid_argument("Unknown visualization field '" + name +
                                       "'. Supported fields: density, velocity, pressure, "
-                                      "blending_coefficient");
+                                      "entropy, blending_coefficient");
         }
       return *it;
     }
