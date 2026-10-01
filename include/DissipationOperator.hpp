@@ -127,4 +127,63 @@ namespace Theseus
         diss[eq] *= nor_mag;
       }
     };
+
+    template<typename GasModelT>
+    MFEM_HOST_DEVICE
+    inline void Scalar_dissipation(const GasModelT &gasModel,
+                                   const PointStateView &S1,
+                                   const PointStateView &S2,
+                                   const mfem::real_t *nor,
+                                   mfem::real_t *diss)
+    {
+      const int dim = gasModel.dim();
+      const int mass_eq = gasModel.L.eq_mass;
+      const int mom0_eq = gasModel.L.eq_mom0;
+      const int ener_eq = gasModel.L.eq_energy;
+
+      const mfem::real_t rho1 = gasModel.density(S1);
+      const mfem::real_t rho2 = gasModel.density(S2);
+      const mfem::real_t rho_mean = 0.5 * (rho1 + rho2);
+      const mfem::real_t drho = rho2 - rho1;
+      const mfem::real_t p1 = gasModel.pressure(S1);
+      const mfem::real_t p2 = gasModel.pressure(S2);
+
+      mfem::real_t vn1 = 0.0;
+      mfem::real_t vn2 = 0.0;
+      mfem::real_t mom1[3] = {0.0, 0.0, 0.0};
+      mfem::real_t mom2[3] = {0.0, 0.0, 0.0};
+      mfem::real_t nor_mag = 0.0;
+
+      diss[ener_eq] = 0.0;
+      for(int d=0; d<dim; d++)
+      {
+        nor_mag += nor[d] * nor[d];
+        mom1[d] = gasModel.momentum(S1, d);
+        mom2[d] = gasModel.momentum(S2, d);
+        const mfem::real_t v1 = gasModel.velocity(S1, d);
+        const mfem::real_t v2 = gasModel.velocity(S2, d);
+        const mfem::real_t dv = v2 - v1;
+        const mfem::real_t vbar = 0.5 * (v1 + v2);
+        vn1 += v1 * nor[d];
+        vn2 += v2 * nor[d];
+        diss[ener_eq] += 0.5 * drho * v1*v2 + rho_mean * dv * vbar;
+      }
+      nor_mag = Kernels::rsqrt(nor_mag);
+      const mfem::real_t lambda_max = Kernels::rmax(
+        Kernels::rabs(vn1) + gasModel.sound_speed(S1) * nor_mag,
+        Kernels::rabs(vn2) + gasModel.sound_speed(S2) * nor_mag);
+
+      const mfem::real_t gm1_av_inv = 1.0 / (gasModel.gamma() - 1.0);
+      const mfem::real_t beta1 = 0.5 * rho1 / p1;
+      const mfem::real_t beta2 = 0.5 * rho2 / p2;
+      const mfem::real_t beta_ln = Kernels::ComputeLogMean(beta1, beta2, 1e-4);
+      diss[ener_eq] += 0.5 * drho * gm1_av_inv / beta_ln + 0.5 * rho_mean * gm1_av_inv * (1.0 / beta2 - 1.0 / beta1);
+
+      diss[mass_eq] = 0.5 * lambda_max * drho;
+      for(int d=0; d<dim; d++)
+      {
+        diss[mom0_eq + d] = 0.5 * lambda_max * (mom2[d] - mom1[d]);
+      }
+      diss[ener_eq] *= 0.5 * lambda_max;
+    }
 }
