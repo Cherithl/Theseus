@@ -48,6 +48,7 @@ class HarnessFixture:
         )
 
         self._write_launcher("mpiexec", 2)
+        self._write_launcher("custom-launcher", 2)
         self._write_launcher("ibrun", 2)
         self._write_launcher("flux", 6)
         self._write_hostname()
@@ -102,7 +103,8 @@ class HarnessFixture:
         )
         executable.chmod(0o755)
 
-    def run(self, *args: str, hostname: str = "workstation", output: str = "none"):
+    def run(self, *args: str, hostname: str = "workstation", output: str = "none",
+            launcher: str | None = None):
         env = os.environ.copy()
         env.update(
             {
@@ -115,6 +117,9 @@ class HarnessFixture:
                 "NGPU": "4",
             }
         )
+        env.pop("THESEUS_MPI_LAUNCHER", None)
+        if launcher is not None:
+            env["THESEUS_MPI_LAUNCHER"] = launcher
         return subprocess.run(
             ["/bin/bash", str(HARNESS), "-b", str(self.builddir), *args, "-c", str(self.config)],
             cwd=self.root,
@@ -172,6 +177,69 @@ class RunTheseusHarnessTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout)
             self.assertTrue(fixture.patched_config()["runTime"]["checkpoint_load"])
 
+    def test_mesh_filename_keeps_configured_directory(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = HarnessFixture(tempdir)
+            config = json.loads(fixture.config.read_text())
+            config["runTime"]["mesh_file"] = "configured/mesh.file"
+            fixture.config.write_text(json.dumps(config), encoding="utf-8")
+
+            result = fixture.run("-m", "replacement.msh", "-k")
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(
+                fixture.patched_config()["runTime"]["mesh_file"],
+                "configured/replacement.msh",
+            )
+
+    def test_relative_mesh_path_is_resolved_from_launch_directory(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = HarnessFixture(tempdir)
+
+            result = fixture.run("-m", "user-meshes/replacement.msh", "-k")
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(
+                fixture.patched_config()["runTime"]["mesh_file"],
+                str(fixture.root.resolve() / "user-meshes" / "replacement.msh"),
+            )
+
+    def test_absolute_mesh_path_is_used_unchanged(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = HarnessFixture(tempdir)
+            mesh = fixture.root / "external-meshes" / "replacement.msh"
+
+            result = fixture.run("-m", str(mesh), "-k")
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertEqual(
+                fixture.patched_config()["runTime"]["mesh_file"], str(mesh)
+            )
+
+    def test_cfl_override_enables_variable_timestep(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = HarnessFixture(tempdir)
+            config = json.loads(fixture.config.read_text())
+            config["runTime"]["variable_dt"] = False
+            config["runTime"]["dt"] = 0.25
+            fixture.config.write_text(json.dumps(config), encoding="utf-8")
+
+            result = fixture.run("-s", "0.125", "-k")
+
+            self.assertEqual(result.returncode, 0, result.stdout)
+            runtime = fixture.patched_config()["runTime"]
+            self.assertTrue(runtime["variable_dt"])
+            self.assertEqual(runtime["cfl"], 0.125)
+
+    def test_fixed_timestep_and_cfl_overrides_are_mutually_exclusive(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = HarnessFixture(tempdir)
+
+            result = fixture.run("-t", "0.01", "-s", "0.1", "-k")
+
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertIn("choose either -t TIMESTEP or -s CFL", result.stdout)
+
     def test_explicit_step_check_requires_final_cycle(self):
         with tempfile.TemporaryDirectory() as tempdir:
             fixture = HarnessFixture(tempdir)
@@ -207,6 +275,15 @@ class RunTheseusHarnessTests(unittest.TestCase):
                 log = fixture.launcher_log()
                 self.assertTrue(log.startswith(expected[0]), log)
                 self.assertIn(expected[1], log)
+
+    def test_one_explicit_launcher_override_precedes_platform_detection(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            fixture = HarnessFixture(tempdir)
+            launcher = str(fixture.bindir / "custom-launcher")
+            result = fixture.run("-k", "-p", "5", hostname="front123",
+                                 launcher=launcher)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertTrue(fixture.launcher_log().startswith("custom-launcher"))
 
 
 if __name__ == "__main__":
