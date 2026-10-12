@@ -20,8 +20,8 @@
 # Unit testing self-test suite
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-add_test(NAME ValidationRunnerTests
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/validation_runner_tests.py)
+add_test(NAME TestRunnerTests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_runner_tests.py)
 
 add_test(
     NAME RunTheseusHarnessTests
@@ -282,3 +282,14 @@ add_executable(visualization_fields_tests visualization_fields_tests.cpp)
 target_include_directories(visualization_fields_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(visualization_fields_tests PRIVATE ${THESEUS_MFEM_TARGET} MPI::MPI_CXX)
 add_test(NAME VisualizationFieldsTests COMMAND visualization_fields_tests)
+
+add_executable(viscous_volume_tests viscous_volume_tests.cpp)
+target_include_directories(viscous_volume_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(viscous_volume_tests PRIVATE ${THESEUS_MFEM_TARGET} MPI::MPI_CXX)
+if(ENABLE_CUDA)
+  set_source_files_properties(viscous_volume_tests.cpp PROPERTIES LANGUAGE CUDA)
+  target_include_directories(viscous_volume_tests PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+  target_compile_options(viscous_volume_tests PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:--expt-extended-lambda --expt-relaxed-constexpr>)
+endif()
+add_test(NAME ViscousVolumeTests COMMAND viscous_volume_tests)
