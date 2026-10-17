@@ -252,6 +252,48 @@ if(THESEUS_WITH_PLATO)
         add_test(NAME ThermoTableTestingSuite COMMAND table_lookup_tests)
 endif()
 
+if(THESEUS_WITH_PLATO)
+    add_executable(lte_flux_tests
+       unit_test_main.cpp
+       lte_flux_tests.cpp
+    )
+
+    target_compile_definitions(lte_flux_tests PRIVATE USE_PLATO)
+    if(SUTHERLAND)
+      target_compile_definitions(lte_flux_tests PRIVATE SUTHERLAND)
+    endif()
+    target_include_directories(lte_flux_tests
+          PRIVATE
+          ${PROJECT_SOURCE_DIR}/include
+          ${CMAKE_PREFIX_PATH}/include
+          ${PROJECT_BINARY_DIR}/generated
+    )
+
+   target_link_directories(lte_flux_tests
+         PUBLIC ${CMAKE_PREFIX_PATH}/lib
+   )
+
+    target_link_libraries(lte_flux_tests
+           PRIVATE
+           ${THESEUS_MFEM_TARGET}
+           MPI::MPI_CXX
+           plato
+    )
+
+   if(CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES)
+          target_link_libraries(lte_flux_tests PRIVATE
+            ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES}
+          )
+        endif()
+        if(CMAKE_Fortran_IMPLICIT_LINK_DIRECTORIES)
+          target_link_directories(lte_flux_tests PRIVATE
+          ${CMAKE_Fortran_IMPLICIT_LINK_DIRECTORIES}
+        )
+  endif()
+
+  add_test(NAME LTEFluxTestingSuite COMMAND lte_flux_tests)
+endif()
+
 add_executable(radial_profile_tests radial_profile_tests.cpp)
 target_include_directories(radial_profile_tests PRIVATE ${PROJECT_SOURCE_DIR}/include)
 add_test(NAME RadialProfileTests COMMAND radial_profile_tests

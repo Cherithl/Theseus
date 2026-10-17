@@ -22,7 +22,7 @@ namespace Theseus
     {
       // LTE table specific quantities
       int nx, ny;                // dimensions of LTE table
-      int num_properties = 9;    // CL NOTE : change the num_properties if more are being stored
+      int num_properties = 11;    // CL NOTE : change the num_properties if more are being stored
 
       // Property indices in the LTE table
       int P_idx        = 0;  // pressure
@@ -34,6 +34,8 @@ namespace Theseus
       int c_idx        = 6;  // equilibrium sound-speed
       int mu_idx       = 7;  // shear viscosity
       int lambda_idx   = 8;  // thermal conductivity
+      int s_idx        = 9;  // entropy
+      int g_idx        = 10; // Gibbs free energy
 
       void setup(int nx_, int ny_)
       {
@@ -115,11 +117,11 @@ namespace Theseus
 
       mfem::Vector yc(nb_comp), Xc(nb_comp);
       mfem::Vector Xi(nb_spec), Xitol(nb_spec), Xip(nb_spec), Xim(nb_spec), yi(nb_spec),
-        Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec),
+        Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec), si(nb_spec), gi(nb_spec),
         Di(nb_spec),Dij(nb_spec*(nb_spec + 1)/2), di(nb_spec);
       mfem::Vector temp(nb_temp), lambda_int(nb_temp);
 
-      mfem::real_t R, P, nb, e, betaT, alpha, cv, gam, cp, c,
+      mfem::real_t R, P, nb, e, betaT, alpha, cv, gam, cp, c, s, g,
         mu, sigma, lambda_trh, lambda_tre, lambda_reactive;
 
       plato_get_Ri(Ri.GetData());
@@ -147,8 +149,12 @@ namespace Theseus
 
               // Energies and enthalpy per unit-mass
               plato_get_species_energy(temp.GetData(), ei.GetData());
+              plato_get_species_entropy(temp.GetData(), &P, si.GetData());
               for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T;
+              for(int sp=0; sp < nb_spec; sp++) gi[sp] = hi[sp] - T*si[sp];
               e = Theseus::Kernels::Dot(nb_spec, yi.GetData(), ei.GetData());
+              s = Theseus::Kernels::Dot(nb_spec, yi.GetData(), si.GetData());
+              g = Theseus::Kernels::Dot(nb_spec, yi.GetData(), gi.GetData());
 
               // Derived thermodynamic properties
               // isothermal compressibility, coeff of thermal expansion, cv, cp, gamma, sound_speed at equilibrium
@@ -197,6 +203,8 @@ namespace Theseus
               lte_table[L.property_index(L.c_idx, i, j)] = c;
               lte_table[L.property_index(L.mu_idx, i, j)] = mu;
               lte_table[L.property_index(L.lambda_idx, i, j)] = lambda_trh + lambda_tre + lambda_int[0] + lambda_reactive;
+              lte_table[L.property_index(L.s_idx, i, j)] = s;
+              lte_table[L.property_index(L.g_idx, i, j)] = g;
 
               if(i+j == 0)
                 {

@@ -135,7 +135,12 @@ namespace Theseus
           ie_old = ie_new;
           ie_new = ie_update;
           if(iter == 99){
+#ifdef __CUDA_ARCH__
+              printf("Secant method did not converge in internal_energy_from_pressure");
+              asm("trap;");
+#else
             MFEM_ABORT("Secant method did not converge in internal_energy_from_pressure");
+#endif
           }
         }
       return ie_new;
@@ -219,8 +224,17 @@ namespace Theseus
     inline mfem::real_t entropy(const PhysicsConstants &phys, const StateLayout &L,
                                 const StateView &S, const LTETables &lteTables) const
     {
-      MFEM_ABORT("CL ALERT : Dont have it in plato tables and also not needed");
+      MFEM_ABORT("Entropy not implemented for LTE yet");
       return 0.0;
+      // return property_lookup(lteTables.L.s_idx, phys, L, S, lteTables);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline mfem::real_t gibbs(const PhysicsConstants &phys, const StateLayout &L,
+                                const StateView &S, const LTETables &lteTables) const
+    {
+      return property_lookup(lteTables.L.g_idx, phys, L, S, lteTables);
     }
 
     template<typename InStateView, typename OutStateView>
@@ -413,7 +427,9 @@ namespace Theseus
     inline mfem::real_t biinterp_lte_table(int property_idx, const PhysicsConstants &phys,
                                            const StateLayout &L, const StateView &S,
                                            const mfem::real_t T,
-                                           const LTETables &lteTables) const
+                                           const LTETables &lteTables,
+                                           mfem::real_t *dQ_drho = nullptr,
+                                           mfem::real_t *dQ_dT = nullptr) const
     {
       /*
        * Q01--------Q11
@@ -440,8 +456,17 @@ namespace Theseus
       mfem::real_t Q10 = lteTables.tables.lte_table[lteTables.L.property_index(property_idx, u_x, l_y)];
       mfem::real_t Q11 = lteTables.tables.lte_table[lteTables.L.property_index(property_idx, u_x, u_y)];
 
-      mfem::real_t wx = (rho  - rho_l)  / (rho_u - rho_l);
-      mfem::real_t wy = (T - T_l) / (T_u - T_l);
+      mfem::real_t one_over_dx = 1.0 / (rho_u - rho_l);
+      mfem::real_t one_over_dy = 1.0 / (T_u - T_l);
+
+      mfem::real_t wx = (rho  - rho_l)  * one_over_dx;
+      mfem::real_t wy = (T - T_l) * one_over_dy;
+
+      if (dQ_drho != nullptr && dQ_dT != nullptr)
+        {
+          *dQ_drho = ((1 - wy) * (Q10 - Q00) + wy * (Q11 - Q01)) * one_over_dx;
+          *dQ_dT   = ((1 - wx) * (Q01 - Q00) + wx * (Q11 - Q10)) * one_over_dy;
+        }
 
       // Clamp to [0, 1]
       wx = Theseus::Kernels::rmax(mfem::real_t(0), Theseus::Kernels::rmin(mfem::real_t(1), wx));
@@ -450,6 +475,80 @@ namespace Theseus
 
       return Q00 * ((1 - wx) * (1 - wy)) + Q01 * ((1 - wx) * wy) +
         Q10 * (wx * (1 - wy)) + Q11 * (wx * wy);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline void symmetrized_Itoh_Abe_discrete_gradient(int property_idx, const PhysicsConstants &phys, const StateLayout &L,
+                                                        const StateView &S1, const StateView &S2,
+                                                        mfem::real_t &grad_fbeta_rho, mfem::real_t &grad_fbeta_beta,
+                                                        const LTETables &lteTables) const
+    {
+      mfem::real_t rho1 = density(phys, L, S1, lteTables);
+      mfem::real_t rho2 = density(phys, L, S2, lteTables);
+      mfem::real_t T1   = temperature(phys, L, S1, lteTables);
+      mfem::real_t T2   = temperature(phys, L, S2, lteTables);
+      mfem::real_t inv_T1 = 1.0 / T1;
+      mfem::real_t inv_T2 = 1.0 / T2;
+
+      mfem::real_t df_drho_1, df_dT_1, df_drho_2, df_dT_2;
+      mfem::real_t f11 = biinterp_lte_table(property_idx, phys, L, S1, T1, lteTables, &df_drho_1, &df_dT_1) * inv_T1;
+      mfem::real_t f12 = biinterp_lte_table(property_idx, phys, L, S1, T2, lteTables) * inv_T2;
+      mfem::real_t f21 = biinterp_lte_table(property_idx, phys, L, S2, T1, lteTables) * inv_T1;
+      mfem::real_t f22 = biinterp_lte_table(property_idx, phys, L, S2, T2, lteTables, &df_drho_2, &df_dT_2) * inv_T2;
+
+      mfem::real_t drho = rho2 - rho1;
+      mfem::real_t dbeta   = inv_T2 - inv_T1;
+
+      mfem::real_t tol_rho = 2.22e-15 + 1.49e-8*Kernels::rmax(rho1, rho2);
+      mfem::real_t tol_beta = 2.22e-15 + 1.49e-8*Kernels::rmax(inv_T1, inv_T2);
+
+      bool use_diff_x = Kernels::rabs(drho) >= tol_rho;
+      bool use_diff_y = Kernels::rabs(dbeta) >= tol_beta;
+
+      mfem::real_t mx = static_cast<mfem::real_t>(use_diff_x);
+      mfem::real_t my = static_cast<mfem::real_t>(use_diff_y);
+
+      if(mx)
+      {
+        std::cout << "CL NOTE : Using the derivative for rho in LTE discrete gradient" << std::endl;
+      }
+
+      if(my)
+      {
+        std::cout << "CL NOTE : Using the derivative for beta in LTE discrete gradient" << std::endl;
+      }
+
+      mfem::real_t drho_safe = drho * mx + (1.0 - mx);
+      mfem::real_t dbeta_safe = dbeta * my + (1.0 - my);
+
+      mfem::real_t num_rho = 0.5*((f21 - f11) + (f22 - f12));
+      mfem::real_t num_beta = 0.5*((f12 - f11) + (f22 - f21));
+
+      mfem::real_t out_rho = num_rho / drho_safe;
+      mfem::real_t out_beta = num_beta / dbeta_safe;
+
+      // If the difference is too small, use the derivative instead
+      mfem::real_t out_rho_grad = 0.5 * (df_drho_1 * inv_T1 + df_drho_2 * inv_T2);
+      mfem::real_t out_beta_grad = 0.5*( (f11*T1 - T1 * df_dT_1) + (f22*T2 - T2 * df_dT_2) );
+
+      grad_fbeta_rho = out_rho * mx + out_rho_grad * (1.0 - mx);
+      grad_fbeta_beta = out_beta * my + out_beta_grad * (1.0 - my);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline void rho_ie_avg_discrete_gradient(const PhysicsConstants &phys, const StateLayout &L,
+                                             const StateView &S1, const StateView &S2,
+                                             mfem::real_t &rho_avg, mfem::real_t &e_avg,
+                                             const LTETables &lteTables) const
+    {
+      mfem::real_t grad_Pbeta_rho, grad_Pbeta_beta;
+      mfem::real_t grad_gbeta_rho, grad_gbeta_beta;
+      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.P_idx, phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteTables);
+      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.g_idx, phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteTables);
+      rho_avg = grad_Pbeta_rho / grad_gbeta_rho;
+      e_avg = grad_gbeta_beta - grad_Pbeta_beta / rho_avg;
     }
   };
 }

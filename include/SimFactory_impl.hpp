@@ -15,6 +15,7 @@
 #include "ChandrashekarFlux.hpp"
 #include "RanochaFlux.hpp"
 #include "PirozzoliFlux.hpp"
+#include "LTEECFlux.hpp"
 #include "HLLFlux.hpp"
 #include "RoeFlux.hpp"
 #include "LTETable.hpp"
@@ -113,6 +114,10 @@ namespace Theseus {
       inv_flux_string == "laxfriedrichs" ||
       inv_flux_string == "lax_friedrichs" ||
       starts_with(inv_flux_string, "lax");
+
+    const bool use_lteec =
+      inv_flux_string == "lteecflux" ||
+      starts_with(inv_flux_string, "lteec");
 
     const bool viscous =
       starts_with(flow_model_string, "visc") ||
@@ -225,7 +230,7 @@ namespace Theseus {
       mfem::real_t rho_max  = runtime.value("rho_max", 1.1);
       mfem::real_t T_min    = runtime.value("T_min", 250.0);
       mfem::real_t T_max    = runtime.value("T_max", 35.0);
-      int num_properties = 9; // CL NOTE : Check LTE EOS
+      int num_properties = 11; // CL NOTE : Check LTE EOS
       auto lteData = std::make_unique<Theseus::LTETable::Data>();
       auto &lteTableData = *lteData;
       Theseus::LTETable::LTETables    lteTables;
@@ -288,25 +293,28 @@ namespace Theseus {
       };
       auto gas_model = std::make_shared<Theseus::LTEGas>(physics_constants, layout, lteTables);
       std::string gasModelName("LTE:"+mixture);
-      if (use_chan)
-        {
-          std::string numFluxName("Chandrashekar");
-          using Physics =
-            Theseus::PhysicsTraits<Theseus::LTEGas,
-                                   Theseus::ChandrashekarFlux::InviscidFlux>;
-          // return MakeTypedRHSOperator<Physics>(inviscid, runtime,
-          //                                   vfes, fes0, pmesh, eta, alpha, grad_u,
-          //                                     indicator, alpha_max, gas_model,
-          //                                     gasModelName, numFluxName);
-          std::cerr << "Error: Cannot use Chandrashekar flux with LTE" << std::endl;
-          return nullptr;
-        }
-      else if (use_piflux)
+      if (use_piflux)
         {
           std::string numFluxName("Pirozzoli");
           using Physics =
             Theseus::PhysicsTraits<Theseus::LTEGas,
                                    Theseus::PirozzoliFlux::InviscidFlux>;
+
+          auto rhsOp = MakeTypedRHSOperator<Physics, Theseus::LTEGas>(inviscid, runtime,
+                                                                      vfes, fes0, pmesh, eta, alpha, grad_u,
+                                                                      indicator, alpha_max, gas_model,
+                                                                      gasModelName, numFluxName);
+          RHSOperator<Physics> *lteRHSOp = dynamic_cast<RHSOperator<Physics> *>(rhsOp.get());
+          auto &operator_cache = lteRHSOp->GetOperatorCacheReference();
+          operator_cache.lteTableData = std::move(lteData);
+          return rhsOp;
+        }
+      else if (use_lteec)
+        {
+          std::string numFluxName("LTEEC");
+          using Physics =
+            Theseus::PhysicsTraits<Theseus::LTEGas,
+                                   Theseus::LTEECFlux::InviscidFlux>;
 
           auto rhsOp = MakeTypedRHSOperator<Physics, Theseus::LTEGas>(inviscid, runtime,
                                                                       vfes, fes0, pmesh, eta, alpha, grad_u,
@@ -353,7 +361,7 @@ namespace Theseus {
       else {
         std::cerr << "Error: Invalid Numerical Flux Type specified: "
                   << inv_flux_string << "\n"
-                  << "Supported: Pirozzoli, LLF/LFR, HLL"
+                  << "Supported: Pirozzoli, LTEECFlux, LLF/LFR, HLL"
                   << std::endl;
         return nullptr;
       }

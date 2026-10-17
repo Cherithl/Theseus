@@ -9,7 +9,6 @@
 #include "plato_Cpp_library_interface.h"
 
 using mfem::real_t;
-
 struct PlatoMixture
 {
     real_t rho    = 0.0;
@@ -23,7 +22,15 @@ struct PlatoMixture
     real_t c      = 0.0;
     real_t mu     = 0.0;
     real_t lambda = 0.0;
+    real_t s      = 0.0;
+    real_t g      = 0.0;
+    real_t dg_drho = 0.0;
+    real_t dg_dT   = 0.0;
+    real_t dp_dT   = 0.0;
+    real_t dp_drho = 0.0;
 };
+
+static void plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix);
 
 static void
 plato_set_state(const real_t rho, const real_t T, PlatoMixture &mix)
@@ -40,7 +47,7 @@ plato_set_state(const real_t rho, const real_t T, PlatoMixture &mix)
 
     mfem::Vector yc(nb_comp), Xc(nb_comp);
     mfem::Vector Xi(nb_spec), Xitol(nb_spec), Xip(nb_spec), Xim(nb_spec), yi(nb_spec),
-                  Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec),
+                  Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec), si(nb_spec), gi(nb_spec),
                   Di(nb_spec),Dij(nb_spec*(nb_spec + 1)/2), di(nb_spec);
     mfem::Vector temp(nb_temp), lambda_int(nb_temp);
 
@@ -65,7 +72,11 @@ plato_set_state(const real_t rho, const real_t T, PlatoMixture &mix)
 
     // Energies and enthalpy per unit-mass
     plato_get_species_energy(temp.GetData(), ei.GetData());
+    plato_get_species_entropy(temp.GetData(), &P, si.GetData());
     for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T;
+    for(int sp=0; sp < nb_spec; sp++) gi[sp] = hi[sp] - T*si[sp];
+    mix.s = Theseus::Kernels::Dot(nb_spec, yi.GetData(), si.GetData());
+    mix.g = Theseus::Kernels::Dot(nb_spec, yi.GetData(), gi.GetData());
     e = Theseus::Kernels::Dot(nb_spec, yi.GetData(), ei.GetData());
 
     betaT = plato_get_eq_isoth_comp(&P, &T, Xi.GetData());
@@ -112,4 +123,81 @@ plato_set_state(const real_t rho, const real_t T, PlatoMixture &mix)
     mix.c = c;
     mix.mu = mu;
     mix.lambda = lambda_trh + lambda_tre + lambda_int[0] + lambda_reactive;
+
+    plato_set_gradients(rho, T, mix);
+}
+
+static void
+plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
+{
+    int nb_comp = plato_get_nb_comp();
+    int nb_spec = plato_get_nb_species();
+    int nb_temp = plato_get_nb_temp();
+
+    mfem::Vector yc(nb_comp), Xc(nb_comp);
+    mfem::Vector Xi(nb_spec), Xitol(nb_spec), Xip(nb_spec), Xim(nb_spec), yi(nb_spec),
+                  Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec), si(nb_spec), gi(nb_spec);
+    mfem::Vector temp(nb_temp), lambda_int(nb_temp);
+
+    real_t R, P, nb, c;
+
+    plato_get_Ri(Ri.GetData());
+
+    real_t eps = 1e-13;
+
+    mfem::Vector g_arr(2);
+    mfem::Vector p_arr(2);
+    // dg_dT
+    for(int i=0; i < 2; i++)
+    {
+        real_t T_mod = T - T*eps + i*2.0*T*eps;
+        temp = T_mod;
+        // Computing LTE composition
+        int flag = 0;
+        yc = 1.0;
+        Xc = 1.0;
+        plato_get_eq_composition_mass(&rho, &T_mod, yc.GetData(), yi.GetData(), &flag);
+        plato_mass_to_mole_fractions(yi.GetData(), Xi.GetData());
+
+        // Pressure
+        R  = Theseus::Kernels::Dot(nb_spec, Ri.GetData(), yi.GetData());
+        P  = rho * R * T_mod;
+        p_arr[i] = P;
+
+        // Energies and enthalpy per unit-mass
+        plato_get_species_energy(temp.GetData(), ei.GetData());
+        plato_get_species_entropy(temp.GetData(), &P, si.GetData());
+        for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T_mod;
+        for(int sp=0; sp < nb_spec; sp++) gi[sp] = hi[sp] - T_mod*si[sp];
+        g_arr[i] = Theseus::Kernels::Dot(nb_spec, yi.GetData(), gi.GetData());
+    }
+    mix.dg_dT = (g_arr[1] - g_arr[0])/(2.0*T*eps);
+    mix.dp_dT = (p_arr[1] - p_arr[0])/(2.0*T*eps);
+
+    // dg_drho
+    for(int i=0; i < 2; i++)
+    {
+        real_t rho_mod = rho - rho*eps + i*2.0*rho*eps;
+        temp = T;
+        // Computing LTE composition
+        int flag = 0;
+        yc = 1.0;
+        Xc = 1.0;
+        plato_get_eq_composition_mass(&rho_mod, &T, yc.GetData(), yi.GetData(), &flag);
+        plato_mass_to_mole_fractions(yi.GetData(), Xi.GetData());
+
+        // Pressure
+        R  = Theseus::Kernels::Dot(nb_spec, Ri.GetData(), yi.GetData());
+        P  = rho_mod * R * T;
+        p_arr[i] = P;
+
+        // Energies and enthalpy per unit-mass
+        plato_get_species_energy(temp.GetData(), ei.GetData());
+        plato_get_species_entropy(temp.GetData(), &P, si.GetData());
+        for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T;
+        for(int sp=0; sp < nb_spec; sp++) gi[sp] = hi[sp] - T*si[sp];
+        g_arr[i] = Theseus::Kernels::Dot(nb_spec, yi.GetData(), gi.GetData());
+    }
+    mix.dg_drho = (g_arr[1] - g_arr[0])/(2.0*rho*eps);
+    mix.dp_drho = (p_arr[1] - p_arr[0])/(2.0*rho*eps);
 }

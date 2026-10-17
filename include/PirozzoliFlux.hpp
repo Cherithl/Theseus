@@ -85,6 +85,8 @@ namespace Theseus
       const mfem::real_t rho2 = gasModel.density(S2);
       const mfem::real_t rho_mean = mfem::real_t(0.5) * (rho1 + rho2);
       mfem::real_t vbar[3] = {0.0, 0.0, 0.0};
+      mfem::real_t mom1[3] = {0.0, 0.0, 0.0};
+      mfem::real_t mom2[3] = {0.0, 0.0, 0.0};
       mfem::real_t diss[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
       mfem::real_t ke_mean = 0.0;
       mfem::real_t vn = 0.0;
@@ -94,8 +96,12 @@ namespace Theseus
       const mfem::real_t pbar = 0.5 * (p1 + p2);
 
       for(int idim = 0;idim < dim;idim++){
-        const mfem::real_t v1 = gasModel.velocity(S1, idim);
-        const mfem::real_t v2 = gasModel.velocity(S2, idim);
+        // const mfem::real_t v1 = gasModel.velocity(S1, idim);
+        // const mfem::real_t v2 = gasModel.velocity(S2, idim);
+        mom1[idim] = gasModel.momentum(S1, idim);
+        mom2[idim] = gasModel.momentum(S2, idim);
+        const mfem::real_t v1 = mom1[idim]/rho1;
+        const mfem::real_t v2 = mom2[idim]/rho2;
         vbar[idim] = 0.5 * (v1 + v2);
         vn += vbar[idim] * nor[idim];
         ke_mean += mfem::real_t(0.25) * ((v1*v1) + (v2*v2));

@@ -19,6 +19,8 @@ using real_t = mfem::real_t;
 using namespace Theseus;
 using namespace Theseus::LTETable;
 
+int num_properties = 11;
+
 TEST(plato_library_init_test)
 {
     // CL NOTE : To make sure the database path is correctly set and avoiding the initialization overhead in the subsequent tests.
@@ -120,7 +122,7 @@ TEST(plato_Temperature_solve_test)
     real_t rho_min  = 1e-4  , rho_max  = 1.1 ;
     real_t T_min = 250.0, T_max = 10000.0;
 
-    int num_properties = 9;
+    // int num_properties = 11;
 
     mfem::Vector lte_table( (num_properties) * (nx*ny) ), inv_table( nx*ny );
     mfem::Vector rho_grid, T_grid, e_grid;
@@ -207,7 +209,7 @@ TEST(plato_Tablelookup_test)
     real_t rho_min  = 0.01  , rho_max  = 0.11 ;
     real_t T_min = 250.0, T_max = 500.0;
 
-    int num_properties = 9;
+    // int num_properties = 11;
 
     mfem::Vector lte_table( (num_properties) * (nx*ny) ), inv_table( nx*ny );
     mfem::Vector rho_grid, T_grid, e_grid;
@@ -332,7 +334,7 @@ TEST(plato_PhysicalState_conversion_test)
     LTETables tables(25,25);
     log_grid(25,0.1,1.1,data.rho_grid);
     log_grid(25,250,3000,data.T_grid);
-    data.lte_table.SetSize(9*25*25);
+    data.lte_table.SetSize(11*25*25);
     data.inv_table.SetSize(25*25);
     real_t e_min,e_max;
     fill_table(tables.L,data.rho_grid.GetData(),data.T_grid.GetData(),
@@ -380,7 +382,7 @@ TEST(plato_Visualization_reference)
   LTETables tables(25, 25);
   log_grid(25, 0.05, 1.1, data.rho_grid);
   log_grid(25, 250, 3000, data.T_grid);
-  data.lte_table.SetSize(9 * 25 * 25);
+  data.lte_table.SetSize(num_properties * 25 * 25);
   data.inv_table.SetSize(25 * 25);
   real_t minimum_energy;
   real_t maximum_energy;
@@ -440,7 +442,7 @@ TEST(plato_BoundaryAcoustic_reference)
   LTETables tables(density_points, temperature_points);
   log_grid(density_points, 0.0001, 1.1, data.rho_grid);
   log_grid(temperature_points, 250, 15000, data.T_grid);
-  data.lte_table.SetSize(9 * density_points * temperature_points);
+  data.lte_table.SetSize(num_properties * density_points * temperature_points);
   data.inv_table.SetSize(density_points * temperature_points);
   real_t minimum_energy;
   real_t maximum_energy;
