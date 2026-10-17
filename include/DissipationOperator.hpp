@@ -7,6 +7,7 @@
 
 #include "mfem.hpp"
 #include "theseus_kernels.hpp"
+#include "NavierStokesFlux.hpp"
 
 namespace Theseus
 {
@@ -185,5 +186,38 @@ namespace Theseus
         diss[mom0_eq + d] = 0.5 * lambda_max * (mom2[d] - mom1[d]);
       }
     diss[ener_eq] *= 0.5 * lambda_max;
+  }
+
+  template<typename GasModelT>
+  MFEM_HOST_DEVICE
+  inline void Lax_dissipation(const GasModelT &gasModel,
+                             const PointStateView &S1,
+                             const PointStateView &S2,
+                             const mfem::real_t *nor,
+                             mfem::real_t *diss)
+  {
+    const int dim = gasModel.dim();
+    const int mass_eq = gasModel.L.eq_mass;
+    const int mom0_eq = gasModel.L.eq_mom0;
+    const int ener_eq = gasModel.L.eq_energy;
+
+    mfem::real_t state1[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
+    mfem::real_t state2[Theseus::MAXEQ] = {0.,0.,0.,0.,0.};
+    state1[mass_eq] = gasModel.density(S1);
+    state2[mass_eq] = gasModel.density(S2);
+    for(int d=0; d<dim; d++)
+    {
+      state1[mom0_eq + d] = gasModel.momentum(S1, d);
+      state2[mom0_eq + d] = gasModel.momentum(S2, d);
+    }
+    state1[ener_eq] = gasModel.energy(S1);
+    state2[ener_eq] = gasModel.energy(S2);
+
+    const mfem::real_t lambda_max = NavierStokesFlux::MaximumNormalWaveSpeed(gasModel, state1, state2, nor);
+
+    for (int eq = 0; eq < gasModel.num_equations(); eq++)
+    {
+      diss[eq] = 0.5 * lambda_max * (state2[eq] - state1[eq]);
+    }
   }
 }
