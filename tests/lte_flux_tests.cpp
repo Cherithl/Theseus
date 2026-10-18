@@ -140,6 +140,9 @@ check_symmetric_itoh_abe_gradient(const real_t rho1, const real_t T1,
    real_t grad_gbeta_rho, grad_gbeta_beta;
    real_t grad_Pbeta_rho, grad_Pbeta_beta;
 
+   std::cout << "\n";
+   std::cout << "del_rho = " << rho2 - rho1 << ", del_T = " << T2 - T1 << std::endl;
+
    eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.g_idx,
       *phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteT);
 
@@ -157,9 +160,6 @@ check_symmetric_itoh_abe_gradient(const real_t rho1, const real_t T1,
 
    const real_t gbeta_jump_approx = grad_gbeta_rho * (rho2 - rho1) + grad_gbeta_beta * (beta2 - beta1);
    const real_t Pbeta_jump_approx = grad_Pbeta_rho * (rho2 - rho1) + grad_Pbeta_beta * (beta2 - beta1);
-
-   std::cout << "\n";
-   std::cout << "del_rho = " << rho2 - rho1 << ", del_T = " << T2 - T1 << std::endl;
 
   //  std::cout << "[[g/T]]        = " << gbeta_jump << "\n";
   //  std::cout << "[[g/T]]_approx = " << gbeta_jump_approx << "\n";

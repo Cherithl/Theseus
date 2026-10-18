@@ -509,12 +509,12 @@ namespace Theseus
       mfem::real_t mx = static_cast<mfem::real_t>(use_diff_x);
       mfem::real_t my = static_cast<mfem::real_t>(use_diff_y);
 
-      if(mx)
+      if (!use_diff_x)
       {
         std::cout << "CL NOTE : Using the derivative for rho in LTE discrete gradient" << std::endl;
       }
 
-      if(my)
+      if (!use_diff_y)
       {
         std::cout << "CL NOTE : Using the derivative for beta in LTE discrete gradient" << std::endl;
       }
