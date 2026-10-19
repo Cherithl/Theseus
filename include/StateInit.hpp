@@ -250,7 +250,61 @@ namespace Prandtl
   static RegisterTaylorGreenVortex2D regTaylorGreenVortex2D;
 
 
+  // Supersonic freestream 2D initial condition
+  std::function<void(const mfem::Vector&, mfem::Vector&)> SupersonicFreestream2DIC()
+  {
+      return [](const mfem::Vector &x, mfem::Vector &y)
+      {
+          MFEM_ASSERT(x.Size() == 2, "Supersonic freestream is a 2D problem");
 
+          const mfem::real_t gamma = 1.4;
+          const mfem::real_t R_gas = 287.05;
+          const mfem::real_t Ma = 5.92;
+          const mfem::real_t T = 53.06;
+          const mfem::real_t p = 308.2;
+
+          const mfem::real_t rho = p / (R_gas * T);
+          const mfem::real_t a = std::sqrt(gamma * R_gas * T);
+          const mfem::real_t u = Ma * a;
+
+          y(0) = rho;
+          y(1) = rho * u;
+          y(2) = 0.0;
+          y(3) = p / (gamma - 1.0) + 0.5 * rho * u * u;
+      };
+  }
+
+
+  // Registration helper
+  struct RegisterSupersonicFreestream2D
+  {
+      RegisterSupersonicFreestream2D()
+      {
+          const mfem::real_t gamma = 1.4;
+          const mfem::real_t R_gas = 287.05;
+          const mfem::real_t Ma = 5.92;
+          const mfem::real_t T = 53.06;
+          const mfem::real_t p = 308.2;
+
+          const mfem::real_t rho = p / (R_gas * T);
+          const mfem::real_t a = std::sqrt(gamma * R_gas * T);
+          const mfem::real_t u = Ma * a;
+          const mfem::real_t E = p / (gamma - 1.0) + 0.5 * rho * u * u;
+
+          const Prandtl::BC_Vector SupersonicFreestream2DInletBCVector({
+              rho, rho * u, 0.0, E
+          });
+
+          Prandtl::ConditionFactory::Instance().RegisterInitialCondition0(
+              "SupersonicFreestream2DIC", SupersonicFreestream2DIC);
+
+          Prandtl::ConditionFactory::Instance().RegisterVectorBoundaryCondition(
+              "SupersonicFreestream2DInletBCVector",
+              SupersonicFreestream2DInletBCVector);
+      }
+  };
+
+  static RegisterSupersonicFreestream2D registerSupersonicFreestream2D;
 
 
   // Lid-driven Cavity initial condition function

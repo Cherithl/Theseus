@@ -150,8 +150,8 @@ namespace Theseus
       // But Roe dissipation makes test simulations unstable with current testing
       // configurations. For now, we keep scalar default, and add the following todo...
       // TODO: Add runtime selection for dissipation operator
-      // Scalar_dissipation(gasModel, S1, S2, nor, diss);
-      Roe_dissipation(gasModel, S1, S2, nor, diss);
+      Scalar_dissipation(gasModel, S1, S2, nor, diss);
+      // Roe_dissipation(gasModel, S1, S2, nor, diss);
 
       flux[mass_eq] = rho_ln * vn - diss[mass_eq];
       for (int d = 0; d < dim; d++)
