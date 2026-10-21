@@ -459,7 +459,9 @@ namespace Theseus
     inline mfem::real_t biinterp_lte_table(int property_idx, const PhysicsConstants &phys,
                                            const StateLayout &L, const StateView &S,
                                            const mfem::real_t T,
-                                           const LTETables &lteTables) const
+                                           const LTETables &lteTables,
+                                           mfem::real_t *dQ_drho = nullptr,
+                                           mfem::real_t *dQ_dT = nullptr) const
     {
       /*
        * Q01--------Q11
@@ -491,6 +493,12 @@ namespace Theseus
 
       mfem::real_t wx = (rho  - rho_l)  * one_over_dx;
       mfem::real_t wy = (T - T_l) * one_over_dy;
+
+      if (dQ_drho != nullptr && dQ_dT != nullptr)
+        {
+          *dQ_drho = ((1 - wy) * (Q10 - Q00) + wy * (Q11 - Q01)) * one_over_dx;
+          *dQ_dT   = ((1 - wx) * (Q01 - Q00) + wx * (Q11 - Q10)) * one_over_dy;
+        }
 
       // Clamp to [0, 1]
       wx = Theseus::Kernels::rmax(mfem::real_t(0), Theseus::Kernels::rmin(mfem::real_t(1), wx));
