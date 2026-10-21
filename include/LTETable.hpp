@@ -22,7 +22,7 @@ namespace Theseus
     {
       // LTE table specific quantities
       int nx, ny;                // dimensions of LTE table
-      int num_properties = 11;    // CL NOTE : change the num_properties if more are being stored
+      int num_properties = 15;    // CL NOTE : change the num_properties if more are being stored
 
       // Property indices in the LTE table
       int P_idx        = 0;  // pressure
@@ -36,6 +36,10 @@ namespace Theseus
       int lambda_idx   = 8;  // thermal conductivity
       int s_idx        = 9;  // entropy
       int g_idx        = 10; // Gibbs free energy
+      int dg_drho_idx   = 11; // derivative of Gibbs free energy w.r.t. density
+      int dg_dT_idx     = 12; // derivative of Gibbs free energy w.r.t. temperature
+      int dp_drho_idx   = 13; // derivative of pressure w.r.t. density
+      int dp_dT_idx     = 14; // derivative of pressure w.r.t. temperature
 
       void setup(int nx_, int ny_)
       {
@@ -102,6 +106,67 @@ namespace Theseus
         {
           grid[i] = min * std::pow(10, i * step);
         }
+    }
+
+    inline void set_gradients(mfem::real_t rho, mfem::real_t T, mfem::Vector &yc, mfem::Vector &yi, mfem::Vector &Ri,
+                              mfem::Vector &ei, mfem::Vector &hi, mfem::Vector &si, mfem::Vector &gi,
+                              mfem::real_t* lte_table, const LTETable::Layout &L,
+                              int rho_idx, int T_idx)
+    {
+#ifdef USE_PLATO
+      int nb_spec = plato_get_nb_species();
+      int nb_temp = plato_get_nb_temp();
+      mfem::Vector temp(nb_temp);
+      mfem::Vector g_arr(2), p_arr(2);
+      mfem::real_t eps = 1e-13;
+      // Gradients wrt Temperature
+      for(int i=0; i< 2; i++)
+      {
+        mfem::real_t T_mod = T*(1.0 + eps*(2*i-1));
+        temp = T_mod;
+        int flag = 0;
+        yc = 1.0;
+        plato_get_eq_composition_mass(&rho, &T_mod, yc.GetData(), yi.GetData(), &flag);
+
+        // Pressure
+        mfem::real_t R = Theseus::Kernels::Dot(nb_spec, Ri.GetData(), yi.GetData());
+        mfem::real_t P = rho * R * T_mod;
+        p_arr[i] = P;
+
+        // Energies and enthalpy per unit-mass
+        plato_get_species_energy(temp.GetData(), ei.GetData());
+        plato_get_species_entropy(temp.GetData(), &P, si.GetData());
+        for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T_mod;
+        for(int sp=0; sp< nb_spec; sp++) gi[sp] = hi[sp] - T_mod*si[sp];
+        g_arr[i] = Theseus::Kernels::Dot(nb_spec, yi.GetData(), gi.GetData());
+      }
+      lte_table[L.property_index(L.dg_dT_idx, rho_idx, T_idx)] = (g_arr[1] - g_arr[0])/(2.0*T*eps);
+      lte_table[L.property_index(L.dp_dT_idx, rho_idx, T_idx)] = (p_arr[1] - p_arr[0])/(2.0*T*eps);
+
+      // Gradients wrt Density
+      for(int i=0; i< 2; i++)
+      {
+        mfem::real_t rho_mod = rho*(1.0 + eps*(2*i-1));
+        temp = T;
+        int flag = 0;
+        yc = 1.0;
+        plato_get_eq_composition_mass(&rho_mod, &T, yc.GetData(), yi.GetData(), &flag);
+
+        // Pressure
+        mfem::real_t R = Theseus::Kernels::Dot(nb_spec, Ri.GetData(), yi.GetData());
+        mfem::real_t P = rho_mod * R * T;
+        p_arr[i] = P;
+
+        // Energies and enthalpy per unit-mass
+        plato_get_species_energy(temp.GetData(), ei.GetData());
+        plato_get_species_entropy(temp.GetData(), &P, si.GetData());
+        for(int sp=0; sp < nb_spec; sp++) hi[sp] = ei[sp] + Ri[sp]*T;
+        for(int sp=0; sp< nb_spec; sp++) gi[sp] = hi[sp] - T*si[sp];
+        g_arr[i] = Theseus::Kernels::Dot(nb_spec, yi.GetData(), gi.GetData());
+      }
+      lte_table[L.property_index(L.dg_drho_idx, rho_idx, T_idx)] = (g_arr[1] - g_arr[0])/(2.0*rho*eps);
+      lte_table[L.property_index(L.dp_drho_idx, rho_idx, T_idx)] = (p_arr[1] - p_arr[0])/(2.0*rho*eps);
+#endif
     }
 
     inline void fill_table(const LTETable::Layout &L, const mfem::real_t* rho_grid, const mfem::real_t* T_grid,
@@ -216,6 +281,8 @@ namespace Theseus
                   e_min = std::min(e_min, e);
                   e_max = std::max(e_max, e);
                 }
+
+              set_gradients(rho, T, yc, yi, Ri, ei, hi, si, gi, lte_table, L, i, j);
             }
         }
 #endif

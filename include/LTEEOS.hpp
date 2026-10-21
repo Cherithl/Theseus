@@ -237,6 +237,38 @@ namespace Theseus
       return property_lookup(lteTables.L.g_idx, phys, L, S, lteTables);
     }
 
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline mfem::real_t gibbs_drho(const PhysicsConstants &phys, const StateLayout &L,
+                                const StateView &S, const LTETables &lteTables) const
+    {
+      return property_lookup(lteTables.L.dg_drho_idx, phys, L, S, lteTables);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline mfem::real_t gibbs_dT(const PhysicsConstants &phys, const StateLayout &L,
+                                const StateView &S, const LTETables &lteTables) const
+    {
+      return property_lookup(lteTables.L.dg_dT_idx, phys, L, S, lteTables);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline mfem::real_t pressure_drho(const PhysicsConstants &phys, const StateLayout &L,
+                                const StateView &S, const LTETables &lteTables) const
+    {
+      return property_lookup(lteTables.L.dp_drho_idx, phys, L, S, lteTables);
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline mfem::real_t pressure_dT(const PhysicsConstants &phys, const StateLayout &L,
+                                const StateView &S, const LTETables &lteTables) const
+    {
+      return property_lookup(lteTables.L.dp_dT_idx, phys, L, S, lteTables);
+    }
+
     template<typename InStateView, typename OutStateView>
     MFEM_HOST_DEVICE
     inline void entropy_state(const PhysicsConstants &phys, const StateLayout &L,
@@ -427,9 +459,7 @@ namespace Theseus
     inline mfem::real_t biinterp_lte_table(int property_idx, const PhysicsConstants &phys,
                                            const StateLayout &L, const StateView &S,
                                            const mfem::real_t T,
-                                           const LTETables &lteTables,
-                                           mfem::real_t *dQ_drho = nullptr,
-                                           mfem::real_t *dQ_dT = nullptr) const
+                                           const LTETables &lteTables) const
     {
       /*
        * Q01--------Q11
@@ -462,12 +492,6 @@ namespace Theseus
       mfem::real_t wx = (rho  - rho_l)  * one_over_dx;
       mfem::real_t wy = (T - T_l) * one_over_dy;
 
-      if (dQ_drho != nullptr && dQ_dT != nullptr)
-        {
-          *dQ_drho = ((1 - wy) * (Q10 - Q00) + wy * (Q11 - Q01)) * one_over_dx;
-          *dQ_dT   = ((1 - wx) * (Q01 - Q00) + wx * (Q11 - Q10)) * one_over_dy;
-        }
-
       // Clamp to [0, 1]
       wx = Theseus::Kernels::rmax(mfem::real_t(0), Theseus::Kernels::rmin(mfem::real_t(1), wx));
       wy = Theseus::Kernels::rmax(mfem::real_t(0), Theseus::Kernels::rmin(mfem::real_t(1), wy));
@@ -479,7 +503,8 @@ namespace Theseus
 
     template<typename StateView>
     MFEM_HOST_DEVICE
-    inline void symmetrized_Itoh_Abe_discrete_gradient(int property_idx, const PhysicsConstants &phys, const StateLayout &L,
+    inline void symmetrized_Itoh_Abe_discrete_gradient(int property_idx, int df_drho_idx, int df_dT_idx,
+                                                        const PhysicsConstants &phys, const StateLayout &L,
                                                         const StateView &S1, const StateView &S2,
                                                         mfem::real_t &grad_fbeta_rho, mfem::real_t &grad_fbeta_beta,
                                                         const LTETables &lteTables) const
@@ -491,11 +516,15 @@ namespace Theseus
       mfem::real_t inv_T1 = 1.0 / T1;
       mfem::real_t inv_T2 = 1.0 / T2;
 
-      mfem::real_t df_drho_1, df_dT_1, df_drho_2, df_dT_2;
-      mfem::real_t f11 = biinterp_lte_table(property_idx, phys, L, S1, T1, lteTables, &df_drho_1, &df_dT_1) * inv_T1;
+      mfem::real_t f11 = biinterp_lte_table(property_idx, phys, L, S1, T1, lteTables) * inv_T1;
       mfem::real_t f12 = biinterp_lte_table(property_idx, phys, L, S1, T2, lteTables) * inv_T2;
       mfem::real_t f21 = biinterp_lte_table(property_idx, phys, L, S2, T1, lteTables) * inv_T1;
-      mfem::real_t f22 = biinterp_lte_table(property_idx, phys, L, S2, T2, lteTables, &df_drho_2, &df_dT_2) * inv_T2;
+      mfem::real_t f22 = biinterp_lte_table(property_idx, phys, L, S2, T2, lteTables) * inv_T2;
+
+      mfem::real_t df_drho_1 = biinterp_lte_table(df_drho_idx, phys, L, S1, T1, lteTables);
+      mfem::real_t df_dT_1   = biinterp_lte_table(df_dT_idx, phys, L, S1, T1, lteTables);
+      mfem::real_t df_drho_2 = biinterp_lte_table(df_drho_idx, phys, L, S2, T2, lteTables);
+      mfem::real_t df_dT_2   = biinterp_lte_table(df_dT_idx, phys, L, S2, T2, lteTables);
 
       mfem::real_t drho = rho2 - rho1;
       mfem::real_t dbeta   = inv_T2 - inv_T1;
@@ -545,8 +574,8 @@ namespace Theseus
     {
       mfem::real_t grad_Pbeta_rho, grad_Pbeta_beta;
       mfem::real_t grad_gbeta_rho, grad_gbeta_beta;
-      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.P_idx, phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteTables);
-      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.g_idx, phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteTables);
+      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.P_idx, lteTables.L.dp_drho_idx, lteTables.L.dp_dT_idx, phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteTables);
+      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.g_idx, lteTables.L.dg_drho_idx, lteTables.L.dg_dT_idx, phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteTables);
       rho_avg = grad_Pbeta_rho / grad_gbeta_rho;
       e_avg = grad_gbeta_beta - grad_Pbeta_beta / rho_avg;
     }

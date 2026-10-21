@@ -134,12 +134,12 @@ plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
     int nb_spec = plato_get_nb_species();
     int nb_temp = plato_get_nb_temp();
 
-    mfem::Vector yc(nb_comp), Xc(nb_comp);
-    mfem::Vector Xi(nb_spec), Xitol(nb_spec), Xip(nb_spec), Xim(nb_spec), yi(nb_spec),
-                  Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec), si(nb_spec), gi(nb_spec);
-    mfem::Vector temp(nb_temp), lambda_int(nb_temp);
+    mfem::Vector yc(nb_comp);
+    mfem::Vector yi(nb_spec),
+                  Ri(nb_spec), ei(nb_spec), hi(nb_spec), si(nb_spec), gi(nb_spec);
+    mfem::Vector temp(nb_temp);
 
-    real_t R, P, nb, c;
+    real_t R, P;
 
     plato_get_Ri(Ri.GetData());
 
@@ -155,9 +155,7 @@ plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
         // Computing LTE composition
         int flag = 0;
         yc = 1.0;
-        Xc = 1.0;
         plato_get_eq_composition_mass(&rho, &T_mod, yc.GetData(), yi.GetData(), &flag);
-        plato_mass_to_mole_fractions(yi.GetData(), Xi.GetData());
 
         // Pressure
         R  = Theseus::Kernels::Dot(nb_spec, Ri.GetData(), yi.GetData());
@@ -182,9 +180,7 @@ plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
         // Computing LTE composition
         int flag = 0;
         yc = 1.0;
-        Xc = 1.0;
         plato_get_eq_composition_mass(&rho_mod, &T, yc.GetData(), yi.GetData(), &flag);
-        plato_mass_to_mole_fractions(yi.GetData(), Xi.GetData());
 
         // Pressure
         R  = Theseus::Kernels::Dot(nb_spec, Ri.GetData(), yi.GetData());

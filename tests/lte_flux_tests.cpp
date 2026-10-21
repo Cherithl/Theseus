@@ -20,7 +20,7 @@ using real_t = mfem::real_t;
 using namespace Theseus;
 using namespace Theseus::LTETable;
 
-int num_properties = 11;
+int num_properties = 15; // CL NOTE : Check LTE EOS
 int nx = 1001;
 int ny = 1001;
 real_t rho_min  = 1e-4  , rho_max  = 1.1 ;
@@ -84,11 +84,17 @@ TEST(gibbs)
   PointStateView S(U.data());
 
   real_t g_plato = mix.g;
-  real_t dg_rrho_eos, dg_dT_eos, dp_drho_eos, dp_dT_eos;
   real_t T_new = eos.temperature(*phys, L, S, lteT);
-  real_t g_eos = eos.biinterp_lte_table(lteT.L.g_idx, *phys, L, S, T_new, lteT, &dg_rrho_eos, &dg_dT_eos);
-  real_t p_eos = eos.biinterp_lte_table(lteT.L.P_idx, *phys, L, S, T_new, lteT, &dp_drho_eos, &dp_dT_eos);
+  real_t g_eos = eos.biinterp_lte_table(lteT.L.g_idx, *phys, L, S, T_new, lteT);
+  real_t p_eos = eos.biinterp_lte_table(lteT.L.P_idx, *phys, L, S, T_new, lteT);
 
+  // CL NOTE : The following values are computed using table lookup of stored derivatives
+  real_t dg_drho_eos = eos.biinterp_lte_table(lteT.L.dg_drho_idx, *phys, L, S, T_new, lteT);
+  real_t dg_dT_eos   = eos.biinterp_lte_table(lteT.L.dg_dT_idx, *phys, L, S, T_new, lteT);
+  real_t dp_drho_eos = eos.biinterp_lte_table(lteT.L.dp_drho_idx, *phys, L, S, T_new, lteT);
+  real_t dp_dT_eos   = eos.biinterp_lte_table(lteT.L.dp_dT_idx, *phys, L, S, T_new, lteT);
+
+  // CL NOTE : The following values are computed by PLATO and returned in the PlatoMixture struct.
   real_t dg_dT_plato = mix.dg_dT;
   real_t dg_drho_plato = mix.dg_drho;
   real_t dp_dT_plato = mix.dp_dT;
@@ -98,7 +104,7 @@ TEST(gibbs)
   std::cout << "nx = " << nx << ", ny = " << ny << std::endl;
   std::cout << "g_rel   = " << (g_plato - g_eos)/g_plato << std::endl;
   std::cout << "dg_dT_rel = " << (dg_dT_plato - dg_dT_eos)/dg_dT_plato << std::endl;
-  std::cout << "dg_drho_rel = " << (dg_drho_plato - dg_rrho_eos)/dg_drho_plato << std::endl;
+  std::cout << "dg_drho_rel = " << (dg_drho_plato - dg_drho_eos)/dg_drho_plato << std::endl;
   std::cout << "===============================" << std::endl;
   std::cout << "p_rel   = " << (mix.P - p_eos)/mix.P << std::endl;
   std::cout << "dp_dT_rel = " << (dp_dT_plato - dp_dT_eos)/dp_dT_plato << std::endl;
@@ -143,10 +149,10 @@ check_symmetric_itoh_abe_gradient(const real_t rho1, const real_t T1,
    std::cout << "\n";
    std::cout << "del_rho = " << rho2 - rho1 << ", del_T = " << T2 - T1 << std::endl;
 
-   eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.g_idx,
+   eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.g_idx, lteT.L.dg_drho_idx, lteT.L.dg_dT_idx,
       *phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteT);
 
-   eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.P_idx,
+   eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.P_idx, lteT.L.dp_drho_idx, lteT.L.dp_dT_idx,
       *phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteT);
 
    const real_t beta1 = 1.0 / T1_eos;
