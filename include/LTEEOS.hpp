@@ -546,15 +546,15 @@ namespace Theseus
       mfem::real_t mx = static_cast<mfem::real_t>(use_diff_x);
       mfem::real_t my = static_cast<mfem::real_t>(use_diff_y);
 
-      if (!use_diff_x)
-      {
-        std::cout << "CL NOTE : Using the derivative for rho in LTE discrete gradient" << std::endl;
-      }
+      // if (!use_diff_x)
+      // {
+      //   printf("CL NOTE : Using the derivative for rho in LTE discrete gradient\n");
+      // }
 
-      if (!use_diff_y)
-      {
-        std::cout << "CL NOTE : Using the derivative for beta in LTE discrete gradient" << std::endl;
-      }
+      // if (!use_diff_y)
+      // {
+      //   printf("CL NOTE : Using the derivative for beta in LTE discrete gradient\n");
+      // }
 
       mfem::real_t drho_safe = drho * mx + (1.0 - mx);
       mfem::real_t dbeta_safe = dbeta * my + (1.0 - my);
