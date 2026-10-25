@@ -449,7 +449,18 @@ namespace Theseus
 
         if (dQ_drho != nullptr && dQ_dT != nullptr)
           {
-            // first-law forms: s slopes and e slopes cancel out
+            // Compute Gibbs free energy derivatives using the thermodynamic
+            // Gibbs relation: dg = -s*dT + (1/rho)*dp.
+            //
+            // This enforces the required thermodynamic identities for
+            // equal-state consistency of the entropy-conservative flux.
+            //
+            // Since e, p, and s are interpolated independently, these derivatives
+            // may differ from the exact derivatives of the reconstructed Gibbs
+            // free energy g = e + p/rho - T*s.
+            //
+            // Full thermodynamic consistency would require constructing the
+            // thermodynamic properties from a common consistent potential (Helmholtz potential or Gibbs free energy).
             *dQ_dT   = -s + dP_dT / rho;     // (dg/dT)_rho
             *dQ_drho = dP_drho / rho;        // (dg/drho)_T
           }
