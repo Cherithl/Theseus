@@ -224,9 +224,7 @@ namespace Theseus
     inline mfem::real_t entropy(const PhysicsConstants &phys, const StateLayout &L,
                                 const StateView &S, const LTETables &lteTables) const
     {
-      MFEM_ABORT("Entropy not implemented for LTE yet");
-      return 0.0;
-      // return property_lookup(lteTables.L.s_idx, phys, L, S, lteTables);
+      return property_lookup(lteTables.L.s_idx, phys, L, S, lteTables);
     }
 
     template<typename StateView>
@@ -245,7 +243,9 @@ namespace Theseus
     {
       const mfem::real_t T    = temperature(phys, L, S, lteTables);
       const mfem::real_t beta = 1/T;
-      const mfem::real_t ent_1 = 0.0;
+      const mfem::real_t g = gibbs(phys, L, S, lteTables);
+      const mfem::real_t ke = kinetic_energy_density(phys, L, S, lteTables)/S.mass(L);
+      const mfem::real_t ent_1 = beta*(g - ke);
 
       E.set_mass(L, ent_1);
       int dim = L.dim;
@@ -438,6 +438,23 @@ namespace Theseus
        *  |          |
        * Q00--------Q10
        */
+      if (property_idx == lteTables.L.g_idx)
+      {
+        const mfem::real_t rho = density(phys, L, S, lteTables);
+
+        mfem::real_t dP_drho = 0.0, dP_dT = 0.0;
+        const mfem::real_t P = biinterp_lte_table(lteTables.L.P_idx, phys, L, S, T, lteTables, &dP_drho, &dP_dT);
+        const mfem::real_t e = biinterp_lte_table(lteTables.L.e_idx, phys, L, S, T, lteTables);
+        const mfem::real_t s = biinterp_lte_table(lteTables.L.s_idx, phys, L, S, T, lteTables);
+
+        if (dQ_drho != nullptr && dQ_dT != nullptr)
+          {
+            // first-law forms: s slopes and e slopes cancel out
+            *dQ_dT   = -s + dP_dT / rho;     // (dg/dT)_rho
+            *dQ_drho = dP_drho / rho;        // (dg/drho)_T
+          }
+        return e + P / rho - T * s;
+      }
 
       mfem::real_t rho  = density(phys, L, S, lteTables);
 
@@ -456,11 +473,12 @@ namespace Theseus
       mfem::real_t Q10 = lteTables.tables.lte_table[lteTables.L.property_index(property_idx, u_x, l_y)];
       mfem::real_t Q11 = lteTables.tables.lte_table[lteTables.L.property_index(property_idx, u_x, u_y)];
 
-      mfem::real_t one_over_dx = 1.0 / (rho_u - rho_l);
-      mfem::real_t one_over_dy = 1.0 / (T_u - T_l);
+      mfem::real_t wx, wy;
+      const mfem::real_t one_over_dx = 1.0 / (rho_u - rho_l);
+      const mfem::real_t one_over_dy = 1.0 / (T_u - T_l);
 
-      mfem::real_t wx = (rho  - rho_l)  * one_over_dx;
-      mfem::real_t wy = (T - T_l) * one_over_dy;
+      wx       = (rho - rho_l) * one_over_dx;
+      wy = (T - T_l) * one_over_dy;
 
       if (dQ_drho != nullptr && dQ_dT != nullptr)
         {
@@ -508,16 +526,6 @@ namespace Theseus
 
       mfem::real_t mx = static_cast<mfem::real_t>(use_diff_x);
       mfem::real_t my = static_cast<mfem::real_t>(use_diff_y);
-
-      if (!use_diff_x)
-      {
-        std::cout << "CL NOTE : Using the derivative for rho in LTE discrete gradient" << std::endl;
-      }
-
-      if (!use_diff_y)
-      {
-        std::cout << "CL NOTE : Using the derivative for beta in LTE discrete gradient" << std::endl;
-      }
 
       mfem::real_t drho_safe = drho * mx + (1.0 - mx);
       mfem::real_t dbeta_safe = dbeta * my + (1.0 - my);

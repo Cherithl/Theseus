@@ -143,7 +143,7 @@ plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
 
     plato_get_Ri(Ri.GetData());
 
-    real_t eps = 1e-13;
+    real_t eps = 1e-6;
 
     mfem::Vector g_arr(2);
     mfem::Vector p_arr(2);
