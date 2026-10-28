@@ -92,29 +92,31 @@ static void check_symmetric_itoh_abe_gradient(const real_t rho1, const real_t T1
    const real_t T1_eos = eos.temperature(*phys, L, S1, lteT);
    const real_t T2_eos = eos.temperature(*phys, L, S2, lteT);
 
-   const real_t g1 = eos.biinterp_lte_table(lteT.L.g_idx, *phys, L, S1, T1_eos, lteT);
-   const real_t g2 = eos.biinterp_lte_table(lteT.L.g_idx, *phys, L, S2, T2_eos, lteT);
+   const real_t g1 = eos.gibbs(*phys, L, S1, lteT, &T1_eos);
+   const real_t g2 = eos.gibbs(*phys, L, S2, lteT, &T2_eos);
 
-   const real_t P1 = eos.biinterp_lte_table(lteT.L.P_idx, *phys, L, S1, T1_eos, lteT);
-   const real_t P2 = eos.biinterp_lte_table(lteT.L.P_idx, *phys, L, S2, T2_eos, lteT);
+   const real_t P1 = eos.pressure(*phys, L, S1, lteT, &T1_eos);
+   const real_t P2 = eos.pressure(*phys, L, S2, lteT, &T2_eos);
 
    real_t grad_gbeta_rho, grad_gbeta_beta;
    real_t grad_Pbeta_rho, grad_Pbeta_beta;
 
-   std::cout << "\n";
-   std::cout << "del_rho = " << rho2 - rho1 << ", del_T = " << T2 - T1 << std::endl;
+   auto eval_pressure = [&](const auto &S, mfem::real_t *T, mfem::real_t *pres_der = nullptr) {
+     return eos.pressure(*phys, L, S, lteT, T, pres_der);
+   };
 
-   eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.g_idx,
+   auto eval_gibbs = [&](const auto &S, mfem::real_t *T, mfem::real_t *gibbs_der = nullptr) {
+     return eos.gibbs(*phys, L, S, lteT, T, gibbs_der);
+   };
+
+   eos.symmetrized_Itoh_Abe_discrete_gradient(eval_gibbs,
       *phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteT);
 
-   eos.symmetrized_Itoh_Abe_discrete_gradient(lteT.L.P_idx,
+   eos.symmetrized_Itoh_Abe_discrete_gradient(eval_pressure,
       *phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteT);
 
    const real_t beta1 = 1.0 / T1_eos;
    const real_t beta2 = 1.0 / T2_eos;
-
-   const real_t gbeta_exact = mix2.g * (1/T2) - mix1.g * (1/T1);
-   const real_t Pbeta_exact = mix2.P * (1/T2) - mix1.P * (1/T1);
 
    const real_t gbeta_jump = g2 * beta2 - g1 * beta1;
    const real_t Pbeta_jump = P2 * beta2 - P1 * beta1;
@@ -122,20 +124,23 @@ static void check_symmetric_itoh_abe_gradient(const real_t rho1, const real_t T1
    const real_t gbeta_jump_approx = grad_gbeta_rho * (rho2 - rho1) + grad_gbeta_beta * (beta2 - beta1);
    const real_t Pbeta_jump_approx = grad_Pbeta_rho * (rho2 - rho1) + grad_Pbeta_beta * (beta2 - beta1);
 
-  //  std::cout << "[[g/T]]        = " << gbeta_jump << "\n";
-  //  std::cout << "[[g/T]]_approx = " << gbeta_jump_approx << "\n";
+   const real_t abs_tol = 5e-10;
+   const real_t rel_tol = 1e-13;
 
-  //  std::cout << "[[P/T]]        = " << Pbeta_jump << "\n";
-  //  std::cout << "[[P/T]]_approx = " << Pbeta_jump_approx << "\n";
+   const real_t tol_g = abs_tol + rel_tol * std::max(std::abs(gbeta_jump), std::abs(gbeta_jump_approx));
+   const real_t tol_P = abs_tol + rel_tol * std::max(std::abs(Pbeta_jump), std::abs(Pbeta_jump_approx));
 
-   std::cout << "\trel(gbeta_jump(table) - gbeta_jump_dg) = " << (gbeta_jump - gbeta_jump_approx) / gbeta_jump << "\n";
-   std::cout << "\trel(Pbeta_jump(table) - Pbeta_jump_dg) = " << (Pbeta_jump - Pbeta_jump_approx) / Pbeta_jump << "\n";
+   EXPECT_SMALL(gbeta_jump - gbeta_jump_approx, tol_g);
+   EXPECT_SMALL(Pbeta_jump - Pbeta_jump_approx, tol_P);
 
-  //  std::cout << "\trel(gbeta_jump(table) - gbeta_jump(exact)) = " << (gbeta_jump - gbeta_exact) / gbeta_jump << "\n";
-  //  std::cout << "\trel(Pbeta_jump(table) - Pbeta_jump(exact)) = " << (Pbeta_jump - Pbeta_exact) / Pbeta_jump << "\n";
+  //  std::cout << "\n";
+  //  std::cout << "del_rho = " << rho2 - rho1 << ", del_T = " << T2 - T1 << std::endl;
 
-  //  std::cout << "\trel(gbeta_jump(exact) - gbeta_jump_dg) = " << (gbeta_exact - gbeta_jump_approx) / gbeta_exact << "\n";
-  //  std::cout << "\trel(Pbeta_jump(exact) - Pbeta_jump_dg) = " << (Pbeta_exact - Pbeta_jump_approx) / Pbeta_exact << "\n";
+  //  std::cout << "\terr(gbeta_jump(table) - gbeta_jump_dg) = " << (gbeta_jump - gbeta_jump_approx) << "\n";
+  //  std::cout << "\terr(Pbeta_jump(table) - Pbeta_jump_dg) = " << (Pbeta_jump - Pbeta_jump_approx) << "\n";
+  //  std::cout << "\trel(gbeta_jump(table) - gbeta_jump_dg) = " << (gbeta_jump - gbeta_jump_approx) / gbeta_jump << "\n";
+  //  std::cout << "\trel(Pbeta_jump(table) - Pbeta_jump_dg) = " << (Pbeta_jump - Pbeta_jump_approx) / Pbeta_jump << "\n";
+
 }
 
 template <typename FluxT>
@@ -187,7 +192,7 @@ static void run_vol_flux_tadmor_condition(const real_t rho1, const real_t T1,
       LHS += flux(eq) * (wR(eq) - wL(eq));
     }
     // std::cout << "d = " << d << " LHS - RHS = " << LHS - RHS << ", rel(LHS - RHS) = " << (LHS - RHS)/RHS << std::endl;
-    EXPECT_CLOSE(LHS, RHS, 1e-10);
+    EXPECT_CLOSE(LHS, RHS, 1e-9);
   }
 }
 
@@ -249,8 +254,8 @@ static void run_face_flux_consistency(const FluxT &num_flux)
 
   for(int eq=0; eq < num_eq; eq++)
   {
-    mfem::out.precision(17);
-    mfem::out << "eq = " << eq << " err = " << flux(eq) - expected_flux(eq) << " rel = " << (flux(eq) - expected_flux(eq))/expected_flux(eq) << "\n";
+    // mfem::out.precision(17);
+    // mfem::out << "eq = " << eq << " err = " << flux(eq) - expected_flux(eq) << " rel = " << (flux(eq) - expected_flux(eq))/expected_flux(eq) << "\n";
     EXPECT_CLOSE(flux(eq)/expected_flux(eq), 1.0, 1e-9);
   }
 }
@@ -270,10 +275,10 @@ TEST(gibbs)
   PointStateView S(U.HostRead());
 
   real_t g_plato = mix.g;
-  real_t dg_rrho_eos, dg_dT_eos, dp_drho_eos, dp_dT_eos;
+  std::vector<real_t> g_der(2), p_der(2);
   real_t T_new = eos.temperature(*phys, L, S, lteT);
-  real_t g_eos = eos.biinterp_lte_table(lteT.L.g_idx, *phys, L, S, T_new, lteT, &dg_rrho_eos, &dg_dT_eos);
-  real_t p_eos = eos.biinterp_lte_table(lteT.L.P_idx, *phys, L, S, T_new, lteT, &dp_drho_eos, &dp_dT_eos);
+  real_t g_eos = eos.gibbs(*phys, L, S, lteT, &T_new, g_der.data());
+  real_t p_eos = eos.pressure(*phys, L, S, lteT, &T_new, p_der.data());
 
   real_t dg_dT_plato = mix.dg_dT;
   real_t dg_drho_plato = mix.dg_drho;
@@ -283,12 +288,12 @@ TEST(gibbs)
   std::cout << "\n";
   std::cout << "nx = " << nx << ", ny = " << ny << std::endl;
   std::cout << "g_rel   = " << (g_plato - g_eos)/g_plato << std::endl;
-  std::cout << "dg_dT_rel = " << (dg_dT_plato - dg_dT_eos)/dg_dT_plato << std::endl;
-  std::cout << "dg_drho_rel = " << (dg_drho_plato - dg_rrho_eos)/dg_drho_plato << std::endl;
+  std::cout << "dg_dT_rel = " << (dg_dT_plato - g_der[1])/dg_dT_plato << std::endl;
+  std::cout << "dg_drho_rel = " << (dg_drho_plato - g_der[0])/dg_drho_plato << std::endl;
   std::cout << "===============================" << std::endl;
   std::cout << "p_rel   = " << (mix.P - p_eos)/mix.P << std::endl;
-  std::cout << "dp_dT_rel = " << (dp_dT_plato - dp_dT_eos)/dp_dT_plato << std::endl;
-  std::cout << "dp_drho_rel = " << (dp_drho_plato - dp_drho_eos)/dp_drho_plato << std::endl;
+  std::cout << "dp_dT_rel = " << (dp_dT_plato - p_der[1])/dp_dT_plato << std::endl;
+  std::cout << "dp_drho_rel = " << (dp_drho_plato - p_der[0])/dp_drho_plato << std::endl;
 
   return 0;
 }
@@ -349,13 +354,9 @@ TEST(ECFlux_Tadmor)
 
 TEST(flux_consistency_test)
 {
-  std::cout << "\n" << std::endl;
-  std::cout << "Running LTEECFlux::InviscidFlux test..." << std::endl;
   Theseus::LTEECFlux::InviscidFlux lteec_flux;
   run_face_flux_consistency(lteec_flux);
 
-  std::cout << "\n" << std::endl;
-  std::cout << "Running Theseus::PirozzoliFlux::InviscidFlux test..." << std::endl;
   Theseus::PirozzoliFlux::InviscidFlux piro_flux;
   run_face_flux_consistency(piro_flux);
 

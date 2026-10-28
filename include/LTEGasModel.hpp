@@ -96,11 +96,11 @@ namespace Theseus
       const LTEPropertySample sample(T, density(state), recovered_temperature);
       if (request.pressure)
         {
-          result.pressure = sample.Value(T.L.P_idx);
+          result.pressure = eos.pressure(phys, L, state, T, &recovered_temperature);
         }
       if (request.sound_speed)
         {
-          result.sound_speed = sample.Value(T.L.c_idx);
+          result.sound_speed = eos.sound_speed(phys, L, state, T, &recovered_temperature);
         }
       if (request.viscosity)
         {

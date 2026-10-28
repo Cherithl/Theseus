@@ -35,7 +35,13 @@ namespace Theseus
     inline mfem::real_t R_gas(const PhysicsConstants &phys, const StateLayout &L,
                               const StateView &S, const LTETables &lteTables) const
     {
-      return property_lookup(lteTables.L.R_eq_idx, phys, L, S, lteTables);
+      printf("LTEGasEOS::R_gas is not implemented for LTEGasEOS\n");
+#ifdef __CUDA_ARCH__
+      asm("trap;");
+#else
+      MFEM_ABORT("LTEGasEOS::R_gas is not implemented for LTEGasEOS");
+#endif
+      return pressure(phys, L, S, lteTables) / (density(phys, L, S, lteTables) * temperature(phys, L, S, lteTables));
     }
 
     template<typename StateView>
@@ -95,54 +101,61 @@ namespace Theseus
                                                       const StateView &S, mfem::real_t pressure_target,
                                                       const LTETables &lteTables) const
     {
-      mfem::real_t U[Theseus::MAXEQ];
-      PointStateViewRW S_dummy(U);
-      S_dummy.set_mass(L, S.mass(L));
+//       mfem::real_t U[Theseus::MAXEQ];
+//       PointStateViewRW S_dummy(U);
+//       S_dummy.set_mass(L, S.mass(L));
 
-      for(int idim = 0; idim < L.dim; idim++)
-        {
-          S_dummy.set_momentum(L, idim, S.momentum(L, idim));
-        }
-      S_dummy.set_energy(L, S.energy(L));
+//       for(int idim = 0; idim < L.dim; idim++)
+//         {
+//           S_dummy.set_momentum(L, idim, S.momentum(L, idim));
+//         }
+//       S_dummy.set_energy(L, S.energy(L));
 
-      // Secant Method to find internal energy that matches a target pressure
-      mfem::real_t tol   = 1e-12;
-      mfem::real_t denom = 0.0;
-      mfem::real_t ie_old = pressure_target * 3; // initial guess for internal energy (CL NOTE : make sure this is inside the table range)
-      mfem::real_t ie_new = ie_old*1.01 + tol;
+//       // Secant Method to find internal energy that matches a target pressure
+//       mfem::real_t tol   = 1e-12;
+//       mfem::real_t denom = 0.0;
+//       mfem::real_t ie_old = pressure_target * 3; // initial guess for internal energy (CL NOTE : make sure this is inside the table range)
+//       mfem::real_t ie_new = ie_old*1.01 + tol;
 
-      mfem::real_t ke = kinetic_energy_density(phys, L, S, lteTables);
+//       mfem::real_t ke = kinetic_energy_density(phys, L, S, lteTables);
 
-      mfem::real_t f_old, f_new, ie_update;
+//       mfem::real_t f_old, f_new, ie_update;
 
-      for(int iter = 0; iter < 100; iter++)
-        {
-          S_dummy.set_energy(L, ie_old+ke);
-          f_old = property_lookup(lteTables.L.P_idx, phys, L, S_dummy, lteTables) - pressure_target;
+//       for(int iter = 0; iter < 100; iter++)
+//         {
+//           S_dummy.set_energy(L, ie_old+ke);
+//           f_old = property_lookup(lteTables.L.P_idx, phys, L, S_dummy, lteTables) - pressure_target;
 
-          S_dummy.set_energy(L, ie_new+ke);
-          f_new = property_lookup(lteTables.L.P_idx, phys, L, S_dummy, lteTables) - pressure_target;
+//           S_dummy.set_energy(L, ie_new+ke);
+//           f_new = property_lookup(lteTables.L.P_idx, phys, L, S_dummy, lteTables) - pressure_target;
 
-          denom = f_new - f_old;
+//           denom = f_new - f_old;
 
-          if( Theseus::Kernels::rabs(f_new) < tol || Theseus::Kernels::rabs(denom) < 1e-12)
-            {
-              break;
-            }
+//           if( Theseus::Kernels::rabs(f_new) < tol || Theseus::Kernels::rabs(denom) < 1e-12)
+//             {
+//               break;
+//             }
 
-          ie_update = ie_new - f_new * (ie_new - ie_old) / denom;
+//           ie_update = ie_new - f_new * (ie_new - ie_old) / denom;
 
-          ie_old = ie_new;
-          ie_new = ie_update;
-          if(iter == 99){
+//           ie_old = ie_new;
+//           ie_new = ie_update;
+//           if(iter == 99){
+// #ifdef __CUDA_ARCH__
+//               printf("Secant method did not converge in internal_energy_from_pressure");
+//               asm("trap;");
+// #else
+//             MFEM_ABORT("Secant method did not converge in internal_energy_from_pressure");
+// #endif
+//           }
+//         }
 #ifdef __CUDA_ARCH__
-              printf("Secant method did not converge in internal_energy_from_pressure");
-              asm("trap;");
+      printf("internal_energy_from_pressure is not implemented for LTEGasEOS\n");
+      asm("trap;");
 #else
-            MFEM_ABORT("Secant method did not converge in internal_energy_from_pressure");
+      MFEM_ABORT("internal_energy_from_pressure is not implemented for LTEGasEOS");
 #endif
-          }
-        }
+      mfem::real_t ie_new = 0.0; // placeholder to avoid compiler warning
       return ie_new;
     }
 
@@ -161,18 +174,57 @@ namespace Theseus
 
     template<typename StateView>
     MFEM_HOST_DEVICE
-    inline mfem::real_t pressure(const PhysicsConstants &phys, const StateLayout &L,
-                                 const StateView &S, const LTETables &lteTables) const
+    inline mfem::real_t internal_energy_from_helmholtz(const PhysicsConstants &phys, const StateLayout &L,
+                                               const StateView &S1, const LTETables &lteTables,
+                                               const mfem::real_t *temp = nullptr) const
     {
-      return property_lookup(lteTables.L.P_idx, phys, L, S, lteTables);
+      // e = H - T * H_T
+      mfem::real_t coeffs[16];
+      mfem::real_t xi, eta, drho, dT;
+
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S1, lteTables);
+
+      GetHermiteCoeffs(phys, L, S1, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t H = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 0);
+      mfem::real_t H_T = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 1);
+      return H - T * H_T;
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline mfem::real_t pressure(const PhysicsConstants &phys, const StateLayout &L,
+                                 const StateView &S, const LTETables &lteTables,
+                                 const mfem::real_t *temp = nullptr,
+                                 mfem::real_t *pres_der = nullptr) const
+    {
+      // p = rho^2 * dH/drho
+      mfem::real_t coeffs[16];
+      mfem::real_t xi, eta, drho, dT;
+
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+
+      GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t dH_drho = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 0);
+      mfem::real_t rho = density(phys, L, S, lteTables);
+
+      if(pres_der != nullptr)
+        {
+          mfem::real_t H_rr = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 2, 0);
+          mfem::real_t H_rT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 1);
+          pres_der[0] = 2 * rho * dH_drho + rho * rho * H_rr;
+          pres_der[1] = rho * rho * H_rT;
+        }
+      return rho*rho*dH_drho;
     }
 
     template<typename StateView>
     MFEM_HOST_DEVICE
     inline mfem::real_t gamma(const PhysicsConstants &phys, const StateLayout &L,
-                              const StateView &S, const LTETables &lteTables) const
+                              const StateView &S, const LTETables &lteTables,
+                              const mfem::real_t *temp = nullptr) const
     {
-      return property_lookup(lteTables.L.gamma_eq_idx, phys, L, S, lteTables);
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+      return cp(phys, L, S, lteTables, &T) / cv_from_helmholtz(phys, L, S, lteTables, &T);
     }
 
     template<typename StateView>
@@ -198,52 +250,121 @@ namespace Theseus
     template<typename StateView>
     MFEM_HOST_DEVICE
     inline mfem::real_t sound_speed(const PhysicsConstants &phys, const StateLayout &L,
-                                    const StateView &S, const LTETables &lteTables) const
+                                    const StateView &S, const LTETables &lteTables,
+                                    const mfem::real_t *temp = nullptr) const
     {
-      return property_lookup(lteTables.L.c_idx, phys, L, S, lteTables);
+      // c^2 = 2rho H_rho + rho^2 H_rr - rho^2 H_rT^2 / H_TT
+      mfem::real_t coeffs[16];
+      mfem::real_t xi , eta, drho, dT;
+
+      mfem::real_t rho = density(phys, L, S, lteTables);
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+
+      GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t H_r = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 0);
+      mfem::real_t H_rr = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 2, 0);
+      mfem::real_t H_rT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 1);
+      mfem::real_t H_TT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 2);
+
+      mfem::real_t c2 = 2.0*rho*H_r + rho*rho*H_rr - rho*rho*H_rT*H_rT/H_TT;
+      return Kernels::rsqrt(c2);
     }
 
     template<typename StateView>
     MFEM_HOST_DEVICE
-    inline mfem::real_t cv(const PhysicsConstants &phys, const StateLayout &L,
-                           const StateView &S, const LTETables &lteTables) const
+    inline mfem::real_t cv_from_helmholtz(const PhysicsConstants &phys, const StateLayout &L,
+                           const StateView &S, const LTETables &lteTables,
+                           const mfem::real_t *temp = nullptr) const
     {
-      return property_lookup(lteTables.L.cv_idx, phys, L, S, lteTables);
+      // cv = -T H_TT
+      mfem::real_t coeffs[16];
+      mfem::real_t xi , eta, drho, dT;
+
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+
+      GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t H_TT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 2);
+      return -T * H_TT;
     }
 
     template<typename StateView>
     MFEM_HOST_DEVICE
     inline mfem::real_t cp(const PhysicsConstants &phys, const StateLayout &L,
-                           const StateView &S, const LTETables &lteTables) const
+                           const StateView &S, const LTETables &lteTables,
+                           const mfem::real_t *temp = nullptr) const
     {
-      return property_lookup(lteTables.L.cp_idx, phys, L, S, lteTables);
+      mfem::real_t coeffs[16];
+      mfem::real_t xi , eta, drho, dT;
+
+      mfem::real_t rho = density(phys, L, S, lteTables);
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+
+      GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t H_TT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 2);
+      mfem::real_t H_rT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 1);
+      mfem::real_t P_rho = 0.0; // CL ALERT : Have to implement function P_rho
+#ifdef __CUDA_ARCH__
+      asm("trap;");
+#else
+      MFEM_ABORT("LTEGasEOS::cp is not implemented for LTEGasEOS");
+#endif
+      return -T * H_TT + T * rho * rho * H_rT * H_rT / P_rho;
     }
 
     template<typename StateView>
     MFEM_HOST_DEVICE
     inline mfem::real_t entropy(const PhysicsConstants &phys, const StateLayout &L,
-                                const StateView &S, const LTETables &lteTables) const
+                                const StateView &S, const LTETables &lteTables,
+                                const mfem::real_t *temp = nullptr) const
     {
-      return property_lookup(lteTables.L.s_idx, phys, L, S, lteTables);
+      mfem::real_t coeffs[16];
+      mfem::real_t xi , eta, drho, dT;
+
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+      GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t H_T = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 1);
+      return -H_T;
     }
 
     template<typename StateView>
     MFEM_HOST_DEVICE
     inline mfem::real_t gibbs(const PhysicsConstants &phys, const StateLayout &L,
-                                const StateView &S, const LTETables &lteTables) const
+                              const StateView &S, const LTETables &lteTables,
+                              const mfem::real_t *temp,
+                              mfem::real_t *gibbs_der = nullptr) const
     {
-      return property_lookup(lteTables.L.g_idx, phys, L, S, lteTables);
+      mfem::real_t coeffs[16];
+      mfem::real_t xi , eta, drho, dT;
+
+      mfem::real_t rho = density(phys, L, S, lteTables);
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
+
+      GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
+      mfem::real_t H = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 0);
+
+      if(gibbs_der != nullptr)
+      {
+        mfem::real_t H_r = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 0);
+        mfem::real_t H_T = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 1);
+        mfem::real_t H_rr = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 2, 0);
+        mfem::real_t H_rT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 1);
+        gibbs_der[0] = 2*H_r + rho * H_rr;
+        gibbs_der[1] = H_T + rho * H_rT;
+      }
+
+      return H + pressure(phys, L, S, lteTables, &T)/rho;
     }
 
     template<typename InStateView, typename OutStateView>
     MFEM_HOST_DEVICE
     inline void entropy_state(const PhysicsConstants &phys, const StateLayout &L,
                               const InStateView &S, OutStateView &E,
-                              const LTETables &lteTables) const
+                              const LTETables &lteTables,
+                              const mfem::real_t *temp = nullptr) const
     {
-      const mfem::real_t T    = temperature(phys, L, S, lteTables);
+      const mfem::real_t T = (temp != nullptr) ? *temp : temperature(phys, L, S, lteTables);
       const mfem::real_t beta = 1/T;
-      const mfem::real_t g = gibbs(phys, L, S, lteTables);
+      const mfem::real_t g = gibbs(phys, L, S, lteTables, &T);
       const mfem::real_t ke = kinetic_energy_density(phys, L, S, lteTables)/S.mass(L);
       const mfem::real_t ent_1 = beta*(g - ke);
 
@@ -262,7 +383,7 @@ namespace Theseus
                                           OutStateView &dPrim, const LTETables &lteTables) const
     {
 
-      const mfem::real_t T    = temperature(phys, L, S, lteTables);
+      const mfem::real_t T = temperature(phys, L, S, lteTables);
 
       dPrim.set_mass(L, 0.0); // CL NOTE : won't be using density gradient (if W = [rho, u, v, w , T])
       int dim = L.dim;
@@ -338,8 +459,8 @@ namespace Theseus
       detail::LTETemperatureRecovery recovery(biinterp_inverse_table(phys, L, S, lteTables));
       while (recovery.NeedsIteration())
         {
-          const auto e_guess = biinterp_lte_table(lteTables.L.e_idx, phys, L, S, recovery.temperature, lteTables);
-          const auto cv = biinterp_lte_table(lteTables.L.cv_idx, phys, L, S, recovery.temperature, lteTables);
+          const auto e_guess = internal_energy_from_helmholtz(phys, L, S, lteTables, &recovery.temperature);
+          const auto cv = cv_from_helmholtz(phys, L, S, lteTables, &recovery.temperature);
           recovery.Update(e, e_guess, cv);
           if (recovery.ExceededIterations())
             {
@@ -427,9 +548,7 @@ namespace Theseus
     inline mfem::real_t biinterp_lte_table(int property_idx, const PhysicsConstants &phys,
                                            const StateLayout &L, const StateView &S,
                                            const mfem::real_t T,
-                                           const LTETables &lteTables,
-                                           mfem::real_t *dQ_drho = nullptr,
-                                           mfem::real_t *dQ_dT = nullptr) const
+                                           const LTETables &lteTables) const
     {
       /*
        * Q01--------Q11
@@ -438,35 +557,6 @@ namespace Theseus
        *  |          |
        * Q00--------Q10
        */
-      if (property_idx == lteTables.L.g_idx)
-      {
-        const mfem::real_t rho = density(phys, L, S, lteTables);
-
-        mfem::real_t dP_drho = 0.0, dP_dT = 0.0;
-        const mfem::real_t P = biinterp_lte_table(lteTables.L.P_idx, phys, L, S, T, lteTables, &dP_drho, &dP_dT);
-        const mfem::real_t e = biinterp_lte_table(lteTables.L.e_idx, phys, L, S, T, lteTables);
-        const mfem::real_t s = biinterp_lte_table(lteTables.L.s_idx, phys, L, S, T, lteTables);
-
-        if (dQ_drho != nullptr && dQ_dT != nullptr)
-          {
-            // Compute Gibbs free energy derivatives using the thermodynamic
-            // Gibbs relation: dg = -s*dT + (1/rho)*dp.
-            //
-            // This enforces the required thermodynamic identities for
-            // equal-state consistency of the entropy-conservative flux.
-            //
-            // Since e, p, and s are interpolated independently, these derivatives
-            // may differ from the exact derivatives of the reconstructed Gibbs
-            // free energy g = e + p/rho - T*s.
-            //
-            // Full thermodynamic consistency would require constructing the
-            // thermodynamic properties from a common consistent potential (Helmholtz potential or Gibbs free energy).
-            *dQ_dT   = -s + dP_dT / rho;     // (dg/dT)_rho
-            *dQ_drho = dP_drho / rho;        // (dg/drho)_T
-          }
-        return e + P / rho - T * s;
-      }
-
       mfem::real_t rho  = density(phys, L, S, lteTables);
 
       // Get the lower and upper x and y indices of the cell
@@ -488,14 +578,8 @@ namespace Theseus
       const mfem::real_t one_over_dx = 1.0 / (rho_u - rho_l);
       const mfem::real_t one_over_dy = 1.0 / (T_u - T_l);
 
-      wx       = (rho - rho_l) * one_over_dx;
-      wy = (T - T_l) * one_over_dy;
-
-      if (dQ_drho != nullptr && dQ_dT != nullptr)
-        {
-          *dQ_drho = ((1 - wy) * (Q10 - Q00) + wy * (Q11 - Q01)) * one_over_dx;
-          *dQ_dT   = ((1 - wx) * (Q01 - Q00) + wx * (Q11 - Q10)) * one_over_dy;
-        }
+      wx = (rho - rho_l) * one_over_dx;
+      wy = (T - T_l)     * one_over_dy;
 
       // Clamp to [0, 1]
       wx = Theseus::Kernels::rmax(mfem::real_t(0), Theseus::Kernels::rmin(mfem::real_t(1), wx));
@@ -506,12 +590,13 @@ namespace Theseus
         Q10 * (wx * (1 - wy)) + Q11 * (wx * wy);
     }
 
-    template<typename StateView>
+    template<typename StateView, typename Evaluate>
     MFEM_HOST_DEVICE
-    inline void symmetrized_Itoh_Abe_discrete_gradient(int property_idx, const PhysicsConstants &phys, const StateLayout &L,
-                                                        const StateView &S1, const StateView &S2,
-                                                        mfem::real_t &grad_fbeta_rho, mfem::real_t &grad_fbeta_beta,
-                                                        const LTETables &lteTables) const
+    inline void symmetrized_Itoh_Abe_discrete_gradient(Evaluate thermo,
+                                                       const PhysicsConstants &phys, const StateLayout &L,
+                                                       const StateView &S1, const StateView &S2,
+                                                       mfem::real_t &grad_fbeta_rho, mfem::real_t &grad_fbeta_beta,
+                                                       const LTETables &lteTables) const
     {
       mfem::real_t rho1 = density(phys, L, S1, lteTables);
       mfem::real_t rho2 = density(phys, L, S2, lteTables);
@@ -520,11 +605,11 @@ namespace Theseus
       mfem::real_t inv_T1 = 1.0 / T1;
       mfem::real_t inv_T2 = 1.0 / T2;
 
-      mfem::real_t df_drho_1, df_dT_1, df_drho_2, df_dT_2;
-      mfem::real_t f11 = biinterp_lte_table(property_idx, phys, L, S1, T1, lteTables, &df_drho_1, &df_dT_1) * inv_T1;
-      mfem::real_t f12 = biinterp_lte_table(property_idx, phys, L, S1, T2, lteTables) * inv_T2;
-      mfem::real_t f21 = biinterp_lte_table(property_idx, phys, L, S2, T1, lteTables) * inv_T1;
-      mfem::real_t f22 = biinterp_lte_table(property_idx, phys, L, S2, T2, lteTables, &df_drho_2, &df_dT_2) * inv_T2;
+      mfem::real_t f1_der[2], f2_der[2];
+      mfem::real_t f11 = thermo(S1, &T1, f1_der) * inv_T1;
+      mfem::real_t f12 = thermo(S1, &T2) * inv_T2;
+      mfem::real_t f21 = thermo(S2, &T1) * inv_T1;
+      mfem::real_t f22 = thermo(S2, &T2, f2_der) * inv_T2;
 
       mfem::real_t drho = rho2 - rho1;
       mfem::real_t dbeta   = inv_T2 - inv_T1;
@@ -548,8 +633,8 @@ namespace Theseus
       mfem::real_t out_beta = num_beta / dbeta_safe;
 
       // If the difference is too small, use the derivative instead
-      mfem::real_t out_rho_grad = 0.5 * (df_drho_1 * inv_T1 + df_drho_2 * inv_T2);
-      mfem::real_t out_beta_grad = 0.5*( (f11*T1 - T1 * df_dT_1) + (f22*T2 - T2 * df_dT_2) );
+      mfem::real_t out_rho_grad = 0.5 * (f1_der[0] * inv_T1 + f2_der[0] * inv_T2);
+      mfem::real_t out_beta_grad = 0.5*( (f11*T1 - T1 * f1_der[1]) + (f22*T2 - T2 * f2_der[1]) );
 
       grad_fbeta_rho = out_rho * mx + out_rho_grad * (1.0 - mx);
       grad_fbeta_beta = out_beta * my + out_beta_grad * (1.0 - my);
@@ -562,12 +647,133 @@ namespace Theseus
                                              mfem::real_t &rho_avg, mfem::real_t &e_avg,
                                              const LTETables &lteTables) const
     {
+      auto eval_gibbs = [=] MFEM_HOST_DEVICE (const StateView &S, mfem::real_t *T,
+                                              mfem::real_t *gibbs_der = nullptr) {
+          return gibbs(phys, L, S, lteTables, T, gibbs_der);
+      };
+
+      auto eval_pressure = [=] MFEM_HOST_DEVICE (const StateView &S, mfem::real_t *T,
+                                                 mfem::real_t *pres_der = nullptr) {
+          return pressure(phys, L, S, lteTables, T, pres_der);
+      };
       mfem::real_t grad_Pbeta_rho, grad_Pbeta_beta;
       mfem::real_t grad_gbeta_rho, grad_gbeta_beta;
-      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.P_idx, phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteTables);
-      symmetrized_Itoh_Abe_discrete_gradient(lteTables.L.g_idx, phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteTables);
+      symmetrized_Itoh_Abe_discrete_gradient(eval_pressure, phys, L, S1, S2, grad_Pbeta_rho, grad_Pbeta_beta, lteTables);
+      symmetrized_Itoh_Abe_discrete_gradient(eval_gibbs, phys, L, S1, S2, grad_gbeta_rho, grad_gbeta_beta, lteTables);
       rho_avg = grad_Pbeta_rho / grad_gbeta_rho;
       e_avg = grad_gbeta_beta - grad_Pbeta_beta / rho_avg;
+    }
+
+    MFEM_HOST_DEVICE
+    inline mfem::real_t Hermite_Basis(int basis, int derivative, mfem::real_t t) const
+    {
+      const mfem::real_t t2 = t * t;
+      const mfem::real_t t3 = t2 * t;
+      
+      if(derivative == 0)
+      {
+        switch(basis)
+        {
+          case 0: return 2*t3 - 3*t2 + 1;
+          case 1: return -2*t3 + 3*t2;
+          case 2: return t3 - 2*t2 + t;
+          case 3: return t3 - t2;
+        }
+      }
+      else if(derivative == 1)
+      {
+        switch(basis)
+        {
+          case 0: return 6*t2 - 6*t;
+          case 1: return -6*t2 + 6*t;
+          case 2: return 3*t2 - 4*t + 1;
+          case 3: return 3*t2 - 2*t;
+        }
+      }
+      else if(derivative == 2)
+      {
+        switch(basis)
+        {
+          case 0: return 12*t - 6;
+          case 1: return -12*t + 6;
+          case 2: return 6*t - 4;
+          case 3: return 6*t - 2;
+        }
+      }
+      else
+      {
+        printf("Error: Invalid derivative order %d for Hermite basis function.\n", derivative);
+#ifdef __CUDA_ARCH__
+        asm("trap;");
+#else
+        MFEM_ABORT("Error: Invalid derivative order for Hermite basis function.");
+#endif
+      }
+      return 0.0;
+    }
+
+    MFEM_HOST_DEVICE
+    inline mfem::real_t Evaluate_Hermite_Polynomial(const mfem::real_t *coeffs, mfem::real_t xi, mfem::real_t eta,
+                                            mfem::real_t drho, mfem::real_t dT,
+                                            int derivative_xi, int derivative_eta) const
+    {
+      mfem::real_t result = 0.0;
+      for(int i = 0; i < 4; i++)
+      {
+        for(int j = 0; j < 4; j++)
+        {
+          mfem::real_t basis_xi = Hermite_Basis(i, derivative_xi, xi);
+          mfem::real_t basis_eta = Hermite_Basis(j, derivative_eta, eta);
+          result += coeffs[i * 4 + j] * basis_xi * basis_eta;
+        }
+      }
+      mfem::real_t fac = 1.0;
+      while(derivative_xi > 0)
+      {
+        fac *= drho;
+        derivative_xi--;
+      }
+      while(derivative_eta > 0)
+      {
+        fac *= dT;
+        derivative_eta--;
+      }
+      return result / fac;
+    }
+
+    template<typename StateView>
+    MFEM_HOST_DEVICE
+    inline void GetHermiteCoeffs(const PhysicsConstants &phys, const StateLayout &L,
+                          const StateView &S, const LTETables &lteTables, 
+                          const mfem::real_t &T, mfem::real_t &xi, mfem::real_t &eta,
+                          mfem::real_t &drho, mfem::real_t &dT, mfem::real_t *coeffs) const
+    {
+    mfem::real_t rho = density(phys, L, S, lteTables);
+
+    // Get the lower and upper x and y indices of the cell
+    int l_x = hunt(lteTables.tables.rho_grid, lteTables.L.nx, rho, 0);
+    int l_y = hunt(lteTables.tables.T_grid, lteTables.L.ny, T, 0);
+    int u_x = l_x + 1  , u_y = l_y + 1;
+
+    mfem::real_t rho_l  = lteTables.tables.rho_grid[l_x] , rho_u = lteTables.tables.rho_grid[u_x];
+    mfem::real_t T_l    = lteTables.tables.T_grid[l_y]   , T_u   = lteTables.tables.T_grid[u_y];
+
+    xi = (rho - rho_l) / (rho_u - rho_l);
+    eta = (T - T_l) / (T_u - T_l);
+    drho = rho_u - rho_l;
+    dT = T_u - T_l;
+
+    // Get the coefficients for the Hermite polynomial
+    for(int i = 0; i < 2; i++)
+      {
+        for(int j = 0; j < 2; j++)
+        {
+          coeffs[i*4 + j] = lteTables.tables.lte_table[lteTables.L.property_index(lteTables.L.H_idx, l_x + i, l_y + j)];
+          coeffs[i*4 + j + 2] = lteTables.tables.lte_table[lteTables.L.property_index(lteTables.L.H_T_idx, l_x + i, l_y + j)] * dT;
+          coeffs[(i + 2)*4 + j] = lteTables.tables.lte_table[lteTables.L.property_index(lteTables.L.H_r_idx, l_x + i, l_y + j)] * drho;
+          coeffs[(i + 2)*4 + j + 2] = lteTables.tables.lte_table[lteTables.L.property_index(lteTables.L.H_r_T_idx, l_x + i, l_y + j)] * dT * drho;
+        }
+      }
     }
   };
 }

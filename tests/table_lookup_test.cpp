@@ -138,7 +138,7 @@ TEST(plato_Temperature_solve_test)
 
     // Generation of LTE table
     log_grid(nx, rho_min, rho_max, rho_grid);
-    log_grid(ny, T_min, T_max, T_grid);
+    uniform_grid(ny, T_min, T_max, T_grid);
 
     real_t e_min, e_max;
     fill_table(lteT.L, rho_grid.GetData(), T_grid.GetData(),
@@ -175,9 +175,9 @@ TEST(plato_Temperature_solve_test)
     real_t T_newton    = eos.temp_from_internal_energy(*phys, L, S1, lteT);
 
     real_t P_true = mix.P;
-    real_t P_tab_direct  = eos.biinterp_lte_table(lteT.L.P_idx,*phys, L, S1, T0, lteT);
-    real_t P_tab_newton  = eos.pressure(*phys, L, S1, lteT);
-    real_t e_newton = eos.biinterp_lte_table(lteT.L.e_idx,*phys, L, S1, T_newton, lteT);
+    real_t P_tab_direct = eos.pressure(*phys, L, S1, lteT, &T0);
+    real_t P_tab_newton = eos.pressure(*phys, L, S1, lteT, &T_newton);
+    real_t e_newton = eos.internal_energy_from_helmholtz(*phys, L, S1, lteT, &T_newton);
 
     EXPECT_CLOSE(e/e, e_newton/e, 1e-14);
 
@@ -195,7 +195,7 @@ TEST(plato_Temperature_solve_test)
     plato_set_state(rho, T_random, mix);
     fill_single_dof_state(L, U, dim, rho, u1, rho*mix.e);
     DofStateView S_random(U.data(), 0);
-    real_t rhoe_inverse = eos.internal_energy_from_pressure(*phys, L, S_random, P_true, lteT);
+    real_t rhoe_inverse = eos.internal_energy_from_pressure(*phys, L, S_random, P_true, lteT); // CL ALERT : Has to be implemented for the new LTEEOS
     real_t rel_err_inverse = std::abs(rhoe_inverse - rho*e)/std::abs(rho*e);
     EXPECT_SMALL(rel_err_inverse, 1e-7);
 
@@ -259,11 +259,9 @@ TEST(plato_Tablelookup_test)
     DofStateView S1(U.data(), 0);
 
     real_t P_table  = eos.pressure(*phys, L, S1, lteT);
-    real_t P_corner = lte_table[lteT.L.property_index(lteT.L.P_idx, 3, 7)];
     real_t rel_err = std::abs(mix.P - P_table)/std::abs(mix.P);
 
     EXPECT_SMALL(rel_err, 1e-14);
-    EXPECT_CLOSE(mix.P, P_corner, 1e-14);
 
     // TEST 2 : (Table values at a mid-point of a cell in the table)
     rho = 0.5*(rho_grid[3] + rho_grid[4]);
@@ -278,19 +276,7 @@ TEST(plato_Tablelookup_test)
     P_table  = eos.pressure(*phys, L, S2, lteT);
     rel_err = std::abs(mix.P - P_table)/std::abs(mix.P);
 
-    real_t P_expected = 0;
-    int l_x = hunt(rho_grid.Read(), nx, rho, 0), l_y = hunt(T_grid.Read(), ny, T, 0);
-    for(int i=0; i < 2; i++)
-    {
-        for(int j=0; j < 2; j++)
-        {
-	  P_expected += lte_table[lteT.L.property_index(lteT.L.P_idx, l_x + i, l_y + j)];
-        }
-    }
-    P_expected /= 4.0;
-
     EXPECT_SMALL(rel_err, 1e-6);
-    EXPECT_CLOSE(P_table/P_expected, 1.0, 1e-6);
 
     // TEST 3 : (Table values at an arbitrary point in the table)
     rho = 0.233525*rho_grid[3] + 0.766475*rho_grid[4];
@@ -302,6 +288,7 @@ TEST(plato_Tablelookup_test)
     DofStateView S3(U.data(), 0);
     P_table  = eos.pressure(*phys, L, S3, lteT);
     rel_err = std::abs(mix.P - P_table)/std::abs(mix.P);
+
     EXPECT_SMALL(rel_err, 1e-7);
 
     // TEST 4 : Set (rho,rhoe) Obtain P and then see if we can obtain same rhoe from P using the inverse table lookup

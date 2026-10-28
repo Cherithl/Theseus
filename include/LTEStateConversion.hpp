@@ -80,11 +80,12 @@ ThermodynamicState LTEPhysicalThermodynamics(const EOS &eos,
     throw std::invalid_argument("Missing LTE forward or inverse table");
   mfem::real_t values[MAXEQ] = {};
   PointStateViewRW state(values);
-  auto property = [&](int index, mfem::real_t rho, mfem::real_t temperature) {
+  auto property = [&](mfem::real_t rho, mfem::real_t temperature, bool is_pressure) {
     detail::CheckTableCoordinate(rho, view.rho_grid, tl.nx, "density");
     detail::CheckTableCoordinate(temperature, view.T_grid, tl.ny, "temperature");
     state.set_mass(layout, rho);
-    const auto value = eos.biinterp_lte_table(index, phys, layout, state, temperature, tables);
+    const auto value = is_pressure ? eos.pressure(phys, layout, state, tables, &temperature)
+                                   : eos.internal_energy_from_helmholtz(phys, layout, state, tables, &temperature);
     if (!std::isfinite(value)) throw std::invalid_argument("Nonfinite LTE property");
     return value;
   };
@@ -95,17 +96,17 @@ ThermodynamicState LTEPhysicalThermodynamics(const EOS &eos,
       {
         temperature = pair.temperature;
         rho = detail::SolveTablePressure(view.rho_grid, tl.nx, pair.pressure,
-          [&](auto r) { return property(tl.P_idx, r, temperature); });
+          [&](auto r) { return property(r, temperature, true); });
       }
     else if constexpr (std::is_same_v<Pair, DensityPressure>)
       {
         rho = pair.density;
         temperature = detail::SolveTablePressure(view.T_grid, tl.ny, pair.pressure,
-          [&](auto t) { return property(tl.P_idx, rho, t); });
+          [&](auto t) { return property(rho, t, true); });
       }
     else { rho = pair.density; temperature = pair.temperature; }
   }, input);
-  const auto energy = property(tl.e_idx, rho, temperature);
+  const auto energy = property(rho, temperature, false);
   detail::CheckTableCoordinate(energy, view.e_grid, tl.ny, "specific internal energy");
   return {rho, temperature, energy};
 }
@@ -126,8 +127,8 @@ void ValidateLTERoundTrip(const EOS &eos, const PhysicsConstants &phys,
   while (recovery.NeedsIteration())
     {
       detail::CheckTableCoordinate(recovery.temperature, v.T_grid, l.ny, "inverse temperature");
-      const auto guess = eos.biinterp_lte_table(l.e_idx, phys, layout, state, recovery.temperature, tables);
-      const auto cv = eos.biinterp_lte_table(l.cv_idx, phys, layout, state, recovery.temperature, tables);
+      const auto guess = eos.internal_energy_from_helmholtz(phys, layout, state, tables, &recovery.temperature);
+      const auto cv = eos.cv_from_helmholtz(phys, layout, state, tables, &recovery.temperature);
       RequirePositiveFinite(cv, "LTE heat capacity");
       recovery.Update(energy, guess, cv);
       detail::CheckTableCoordinate(recovery.temperature, v.T_grid, l.ny, "Newton temperature");
