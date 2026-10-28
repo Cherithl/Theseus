@@ -22,8 +22,8 @@ using namespace Theseus;
 using namespace Theseus::LTETable;
 
 int num_properties = 11;
-int nx = 101;
-int ny = 101;
+int nx = 1001;
+int ny = 1001;
 real_t rho_min  = 1e-4  , rho_max  = 1.1 ;
 real_t T_min = 250.0, T_max = 10000.0;
 mfem::Vector lte_table( (num_properties) * (nx*ny) ), inv_table( nx*ny );
@@ -237,27 +237,32 @@ static void run_face_flux_consistency(const FluxT &num_flux)
   Theseus::LTEGas gas(*phys, L, lteT);
   const int num_eq = L.eq_energy + 1;
 
-  const real_t u[3] = {10.0, -3.0, 5.0};
-  const real_t rho = 0.233525*rho_grid[nx/4] + 0.766475*rho_grid[5*nx/6];
-  const real_t T   = 0.768256*T_grid[ny/12] + 0.231744*T_grid[4*ny/5];
-
-  mfem::Vector q(num_eq * ndofs);
-  plato_set_state(rho, T, mix);
-  fill_single_dof_state(L, q, dim, rho, u, rho * mix.e);
-  Theseus::PointStateView S(q.HostRead());
-
-  nor(0) = 0.6;
-  nor(1) = 0.8;
-  nor(2) = 0.0;
-  num_flux.ComputeFaceFlux(gas, q.HostRead(), q.HostRead(), nor.HostRead(), flux.HostWrite());
-  compute_physical_normal_flux(q, nor, gas, expected_flux);
-
-  for(int eq=0; eq < num_eq; eq++)
+  for(real_t rho = 1e-3; rho < 1.0; rho *= 1.5)
   {
-    // mfem::out.precision(17);
-    // mfem::out << "eq = " << eq << " err = " << flux(eq) - expected_flux(eq) << " rel = " << (flux(eq) - expected_flux(eq))/expected_flux(eq) << "\n";
-    EXPECT_CLOSE(flux(eq)/expected_flux(eq), 1.0, 1e-9);
+    for(real_t T = 300.0; T < 10000.0; T += 500.0)
+    {
+      const real_t u[3] = {10.0, -3.0, 5.0};
+      mfem::Vector q(num_eq * ndofs);
+      plato_set_state(rho, T, mix);
+      fill_single_dof_state(L, q, dim, rho, u, rho * mix.e);
+      Theseus::PointStateView S(q.HostRead());
+
+      nor(0) = 0.6;
+      nor(1) = 0.8;
+      nor(2) = 0.0;
+      num_flux.ComputeFaceFlux(gas, q.HostRead(), q.HostRead(), nor.HostRead(), flux.HostWrite());
+      compute_physical_normal_flux(q, nor, gas, expected_flux);
+
+      for(int eq=0; eq < num_eq; eq++)
+      {
+        // mfem::out.precision(17);
+        // mfem::out << "eq = " << eq << " err = " << flux(eq) - expected_flux(eq) << " rel = " << (flux(eq) - expected_flux(eq))/expected_flux(eq) << "\n";
+        EXPECT_CLOSE(flux(eq)/expected_flux(eq), 1.0, 1e-9);
+      }
+    }
   }
+  // const real_t rho = 0.233525*rho_grid[nx/4] + 0.766475*rho_grid[5*nx/6];
+  // const real_t T   = 0.768256*T_grid[ny/12] + 0.231744*T_grid[4*ny/5];
 }
 
 TEST(gibbs)
@@ -307,22 +312,24 @@ TEST(symmetric_itoh_abe_gradient_test)
    real_t rho2 = 0.766475*rho_grid[nx/4] + 0.233525*rho_grid[5*nx/6];
    real_t T2   = 0.231744*T_grid[ny/12] + 0.768256*T_grid[4*ny/5];
 
-   check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
+  for(real_t rho1 = 1e-2; rho1 < 0.5; rho1 *= 1.1)
+  {
+    for(real_t T1 = 300.0; T1 < 4000.0; T1 += 500.0)
+    {
+      rho2 = 2*rho1; T2 = 1.5*T1;
+      check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
 
-   // rho1 - rho2 < tol and T1 - T2 > tol
-   rho2 = rho1 + 1e-8;
-   check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
+      rho2 = rho1 + 1e-8; T2 = 1.5*T1;
+      check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
 
-   // rho1 - rho2 > tol and T1 - T2 < tol
-   rho2 = 0.766475*rho_grid[nx/4] + 0.233525*rho_grid[5*nx/6];
-   T2   = T1 + 1e-8;
-   check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
+      rho2 = 2*rho1; T2 = T1 + 1e-8;
+      check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
 
-   // rho1 - rho2 < tol and T1 - T2 < tol
-    rho2 = rho1 + 1e-8;
-    T2   = T1 + 1e-8;
-    check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
-   return 0;
+      rho2 = rho1 + 1e-8; T2 = T1 + 1e-8;
+      check_symmetric_itoh_abe_gradient(rho1, T1, rho2, T2);
+    }
+  }
+  return 0;
 }
 
 TEST(ECFlux_Tadmor)
@@ -332,23 +339,23 @@ TEST(ECFlux_Tadmor)
   Theseus::LTEECFlux::InviscidFlux lteec_flux;
   Theseus::PirozzoliFlux::InviscidFlux piro_flux;
 
-  real_t rho1 = 0.233525*rho_grid[nx/4] + 0.766475*rho_grid[5*nx/6];
-  real_t T1   = 0.768256*T_grid[ny/12] + 0.231744*T_grid[4*ny/5];
-  real_t rho2 = 0.766475*rho_grid[nx/4] + 0.233525*rho_grid[5*nx/6];
-  real_t T2   = 0.231744*T_grid[ny/12] + 0.768256*T_grid[4*ny/5];
+  for(real_t rho1 = 1e-2; rho1 < 0.5; rho1 *= 1.1)
+  {
+    for(real_t T1 = 300.0; T1 < 4000.0; T1 += 500.0)
+    {
+      real_t rho2 = 2*rho1; real_t T2 = 1.5*T1;
+      run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
 
-  run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
+      rho2 = rho1 + 1e-15;
+      run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
 
-  rho2 = rho1 + 1e-15;
-  run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
+      rho2 = 2*rho1; T2 = T1 + 1e-15;
+      run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
 
-  rho2 = 0.766475*rho_grid[nx/4] + 0.233525*rho_grid[5*nx/6];
-  T2   = T1 + 1e-15;
-  run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
-
-  rho2 = rho1 + 1e-15;
-  T2   = T1 + 1e-15;
-  run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
+      rho2 = rho1 + 1e-15; T2 = T1 + 1e-15;
+      run_vol_flux_tadmor_condition(rho1, T1, rho2, T2, lteec_flux);
+    }
+  }
   return 0;
 }
 
