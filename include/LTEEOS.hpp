@@ -101,62 +101,57 @@ namespace Theseus
                                                       const StateView &S, mfem::real_t pressure_target,
                                                       const LTETables &lteTables) const
     {
-//       mfem::real_t U[Theseus::MAXEQ];
-//       PointStateViewRW S_dummy(U);
-//       S_dummy.set_mass(L, S.mass(L));
+      const mfem::real_t rho = density(phys, L, S, lteTables);
 
-//       for(int idim = 0; idim < L.dim; idim++)
-//         {
-//           S_dummy.set_momentum(L, idim, S.momentum(L, idim));
-//         }
-//       S_dummy.set_energy(L, S.energy(L));
+      // Initial temperature guess from ideal-gas approximation
+      mfem::real_t T = pressure_target / (rho * phys.R_gas);
+      T = Kernels::rmax(lteTables.tables.T_grid[0], Kernels::rmin(lteTables.tables.T_grid[lteTables.L.ny - 1], T));
 
-//       // Secant Method to find internal energy that matches a target pressure
-//       mfem::real_t tol   = 1e-12;
-//       mfem::real_t denom = 0.0;
-//       mfem::real_t ie_old = pressure_target * 3; // initial guess for internal energy (CL NOTE : make sure this is inside the table range)
-//       mfem::real_t ie_new = ie_old*1.01 + tol;
+      const mfem::real_t tol = 1e-12;
+      const int max_iter = 100;
 
-//       mfem::real_t ke = kinetic_energy_density(phys, L, S, lteTables);
+      bool converged = false;
 
-//       mfem::real_t f_old, f_new, ie_update;
+      for (int iter = 0; iter < max_iter; ++iter)
+      {
+        mfem::real_t pres_der[2];
+        const mfem::real_t p = pressure(phys, L, S, lteTables, &T, pres_der);
+        const mfem::real_t residual = p - pressure_target;
 
-//       for(int iter = 0; iter < 100; iter++)
-//         {
-//           S_dummy.set_energy(L, ie_old+ke);
-//           f_old = property_lookup(lteTables.L.P_idx, phys, L, S_dummy, lteTables) - pressure_target;
+        if (Kernels::rabs(residual) <= tol * pressure_target)
+        {
+          converged = true;
+          break;
+        }
 
-//           S_dummy.set_energy(L, ie_new+ke);
-//           f_new = property_lookup(lteTables.L.P_idx, phys, L, S_dummy, lteTables) - pressure_target;
+        const mfem::real_t dp_dT = pres_der[1];
 
-//           denom = f_new - f_old;
-
-//           if( Theseus::Kernels::rabs(f_new) < tol || Theseus::Kernels::rabs(denom) < 1e-12)
-//             {
-//               break;
-//             }
-
-//           ie_update = ie_new - f_new * (ie_new - ie_old) / denom;
-
-//           ie_old = ie_new;
-//           ie_new = ie_update;
-//           if(iter == 99){
-// #ifdef __CUDA_ARCH__
-//               printf("Secant method did not converge in internal_energy_from_pressure");
-//               asm("trap;");
-// #else
-//             MFEM_ABORT("Secant method did not converge in internal_energy_from_pressure");
-// #endif
-//           }
-//         }
+        if (dp_dT <= 0.0)
+        {
 #ifdef __CUDA_ARCH__
-      printf("internal_energy_from_pressure is not implemented for LTEGasEOS\n");
+      printf("Invalid dp/dT in internal_energy_from_pressure\n");
+      asm("trap;");
+  #else
+      MFEM_ABORT("Invalid dp/dT in internal_energy_from_pressure");
+  #endif
+      }
+
+      const mfem::real_t T_new = T - residual / dp_dT;
+
+      // Keep Newton iterations inside the grid bounds to avoid extrapolation
+      T = Kernels::rmax(lteTables.tables.T_grid[0], Kernels::rmin(lteTables.tables.T_grid[lteTables.L.ny - 1], T_new));
+      }
+
+      if (!converged)
+      {
+#ifdef __CUDA_ARCH__
+      printf("Newton method did not converge in internal_energy_from_pressure\n");
       asm("trap;");
 #else
-      MFEM_ABORT("internal_energy_from_pressure is not implemented for LTEGasEOS");
+      MFEM_ABORT("Newton method did not converge in internal_energy_from_pressure");
 #endif
-      mfem::real_t ie_new = 0.0; // placeholder to avoid compiler warning
-      return ie_new;
+      }
+      return rho * internal_energy_from_helmholtz(phys, L, S, lteTables, &T);
     }
 
     template<typename StateView>
@@ -302,12 +297,9 @@ namespace Theseus
       GetHermiteCoeffs(phys, L, S, lteTables, T, xi, eta, drho, dT, coeffs);
       mfem::real_t H_TT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 0, 2);
       mfem::real_t H_rT = Evaluate_Hermite_Polynomial(coeffs, xi, eta, drho, dT, 1, 1);
-      mfem::real_t P_rho = 0.0; // CL ALERT : Have to implement function P_rho
-#ifdef __CUDA_ARCH__
-      asm("trap;");
-#else
-      MFEM_ABORT("LTEGasEOS::cp is not implemented for LTEGasEOS");
-#endif
+      mfem::real_t pres_der[2];
+      pressure(phys, L, S, lteTables, &T, pres_der);
+      mfem::real_t P_rho = pres_der[0];
       return -T * H_TT + T * rho * rho * H_rT * H_rT / P_rho;
     }
 
