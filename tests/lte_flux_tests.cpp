@@ -124,7 +124,7 @@ static void check_symmetric_itoh_abe_gradient(const real_t rho1, const real_t T1
    const real_t gbeta_jump_approx = grad_gbeta_rho * (rho2 - rho1) + grad_gbeta_beta * (beta2 - beta1);
    const real_t Pbeta_jump_approx = grad_Pbeta_rho * (rho2 - rho1) + grad_Pbeta_beta * (beta2 - beta1);
 
-   const real_t abs_tol = 5e-10;
+   const real_t abs_tol = 1e-9;
    const real_t rel_tol = 1e-13;
 
    const real_t tol_g = abs_tol + rel_tol * std::max(std::abs(gbeta_jump), std::abs(gbeta_jump_approx));

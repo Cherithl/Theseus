@@ -98,6 +98,10 @@ namespace Theseus
         {
           result.pressure = eos.pressure(phys, L, state, T, &recovered_temperature);
         }
+      if (request.entropy)
+        {
+          result.entropy = eos.entropy(phys, L, state, T, &recovered_temperature);
+        }
       if (request.sound_speed)
         {
           result.sound_speed = eos.sound_speed(phys, L, state, T, &recovered_temperature);

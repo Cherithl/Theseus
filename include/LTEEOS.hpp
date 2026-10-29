@@ -457,10 +457,13 @@ namespace Theseus
           if (recovery.ExceededIterations())
             {
 #ifdef __CUDA_ARCH__
-              printf("Newton method did not converge in temp_from_internal_energy");
-              asm("trap;");
+    printf("FAILED LTE TEMP RECOVERY\n");
+    printf("rho = %.17e, e_target = %.17e\n", S.mass(L), e);
+    printf("T_guess = %.17e, e_guess = %.17e, cv = %.17e\n", recovery.temperature, e_guess, cv);
+    printf("T_bounds = [%.17e, %.17e]\n", lteTables.tables.T_grid[0], lteTables.tables.T_grid[lteTables.L.ny - 1]);
+    asm("trap;");
 #else
-              MFEM_ABORT("Newton method did not converge in temp_from_internal_energy");
+    MFEM_ABORT("Newton method did not converge in temp_from_internal_energy");
 #endif
             }
         }
@@ -599,8 +602,8 @@ namespace Theseus
 
       mfem::real_t f1_der[2], f2_der[2];
       mfem::real_t f11 = thermo(S1, &T1, f1_der) * inv_T1;
-      mfem::real_t f12 = thermo(S1, &T2) * inv_T2;
-      mfem::real_t f21 = thermo(S2, &T1) * inv_T1;
+      mfem::real_t f12 = thermo(S1, &T2, nullptr) * inv_T2;
+      mfem::real_t f21 = thermo(S2, &T1, nullptr) * inv_T1;
       mfem::real_t f22 = thermo(S2, &T2, f2_der) * inv_T2;
 
       mfem::real_t drho = rho2 - rho1;
