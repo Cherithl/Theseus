@@ -125,3 +125,13 @@ build = "standard"
 requires = ["python", "pyvista"]
 stages = ["run", "prepare", "compare"]
 order = 340
+
+[[test]]
+id = "golden-numflux"
+title = "HLL/Roe CPU-main field regression"
+script = "tests/recipes/regression/golden-numflux.sh"
+suites = ["cartesian", "regression", "full", "integrated"]
+build = "standard"
+requires = ["python", "pyvista"]
+stages = ["prepare", "run", "compare"]
+order = 350

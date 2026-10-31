@@ -737,3 +737,65 @@ TEST(RoeFace_NormalAccumulationMatchesTensorReference_CPG)
     }
   return 0;
 }
+
+TEST(HLLFace_SupersonicBranchesMatchTensorReference)
+{
+  LLFAnalyticLTETables fixture;
+  for (int dimension = 1; dimension <= 3; ++dimension)
+    {
+      const Theseus::PhysicsConstants physics(1.4, 0.72, 287.05, 0.02);
+      const Theseus::StateLayout layout(dimension, 1);
+      const Theseus::IdealGasModel cpg(physics, layout);
+      const Theseus::LTEGasModel<Theseus::LTEGasEOS, Theseus::LTETransport>
+        lte(physics, layout, fixture.tables);
+      for (const mfem::real_t sign : {-1.0, 1.0})
+        {
+          const mfem::real_t vl[3] = {sign * 1800.0, -7.0, 4.0};
+          const mfem::real_t vr[3] = {sign * 1500.0, 6.0, -2.0};
+          mfem::Vector left, right, normal(dimension);
+          normal = 0.0;
+          normal[0] = 0.25;
+          PackLLFReferenceState(layout, 0.3, 210000.0, vl, left);
+          PackLLFReferenceState(layout, 0.8, 315000.0, vr, right);
+          for (const auto *state : {left.HostRead(), right.HostRead()})
+            {
+              const Theseus::PointStateView view{state};
+              EXPECT_TRUE(std::abs(cpg.velocity(view, 0)) > cpg.sound_speed(view));
+              EXPECT_TRUE(std::abs(lte.velocity(view, 0)) > lte.sound_speed(view));
+            }
+          CheckLLFNormalFluxAgainstTensorReference(cpg, left, right, normal);
+          CheckLLFNormalFluxAgainstTensorReference(lte, left, right, normal);
+        }
+    }
+  return 0;
+}
+
+TEST(RoeFace_NormalAccumulationPreservesPassiveScalarFlux)
+{
+  const Theseus::PhysicsConstants physics(1.4, 0.72, 287.05, 0.02);
+  const Theseus::StateLayout layout(2, 1, 1);
+  const Theseus::IdealGasModel gas(physics, layout);
+  const mfem::real_t vl[3] = {13.0, -7.0, 0.0};
+  const mfem::real_t vr[3] = {-9.0, 6.0, 0.0};
+  mfem::Vector left, right, normal(2), actual(layout.nequations()),
+    expected(layout.nequations());
+  PackLLFReferenceState(layout, 0.3, 200000.0, vl, left);
+  PackLLFReferenceState(layout, 0.8, 300000.0, vr, right);
+  right[layout.eq_scalar0] = 0.8 * 0.7;
+  const mfem::Vector saved_left(left);
+  const mfem::Vector saved_right(right);
+  normal[0] = 0.3;
+  normal[1] = -0.7;
+  Theseus::RoeFlux::InviscidFlux{}.ComputeFaceFlux(
+    gas, left.HostRead(), right.HostRead(), normal.HostRead(), actual.HostWrite());
+  RoeTensorReference::ComputeTensorReferenceFaceFlux(
+    gas, left.HostRead(), right.HostRead(), normal.HostRead(), expected.HostWrite());
+  for (int q = 0; q < layout.nequations(); ++q)
+    {
+      EXPECT_CLOSE(actual[q], expected[q],
+                   1e-12 * std::max<mfem::real_t>(1.0, std::abs(expected[q])));
+      EXPECT_EQ(left[q], saved_left[q]);
+      EXPECT_EQ(right[q], saved_right[q]);
+    }
+  return 0;
+}

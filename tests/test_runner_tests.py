@@ -165,6 +165,17 @@ class TestRunnerTests(unittest.TestCase):
         for identifier in suite_ids:
             self.assertEqual(suite.stdout.count(f'# {identifier}:'), 1)
 
+    def test_numflux_recipe_is_registered_for_full_and_integrated_suites(self):
+        repository = Path(SPEC.origin).resolve().parents[1]
+        recipe = run_tests.select_recipe(run_tests.load_recipes(repository), 'golden-numflux')
+        self.assertEqual(recipe['build'], 'standard')
+        self.assertTrue({'full', 'integrated', 'regression'} <= set(recipe['suites']))
+        self.assertEqual(recipe['stages'], ['prepare', 'run', 'compare'])
+        sections = dict(run_tests.recipe_display_commands(recipe))
+        self.assertIn('cpg-hll-cavity cpg-roe-cavity lte-hll-tgv', sections['run'])
+        self.assertIn('scripts/run_theseus.sh', sections['run'])
+        self.assertIn('numflux_regression_test.py', sections['compare'])
+
     def test_recipe_suites_reject_empty_suites(self):
         recipe_script = self.source / 'tests/recipes/example.sh'
         recipe_script.write_text(

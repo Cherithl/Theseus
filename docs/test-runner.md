@@ -257,3 +257,11 @@ execution. Their results apply to those binaries; the runner cannot establish wh
 source produced an arbitrary supplied executable. `check` requires a full run and does
 not accept integrated-only results. Keep binaries, dependencies and tool environments
 unchanged during testing; rerun after changing them.
+
+## HLL and Roe field regressions
+
+The `golden-numflux` recipe exercises CPG HLL/Roe cavity cases and a 3D LTE HLL
+Taylor–Green vortex. Each runs 20 fixed-timestep steps and compares fields against
+CPU reference data for that same flux. See
+[Numerical-flux regression tests](numerical-flux-regression.md) for the case
+inventory, build options, tolerances and reference-generation procedure.
