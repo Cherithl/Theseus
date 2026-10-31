@@ -63,10 +63,8 @@ namespace Theseus
       PointStateView SL{qL};
       PointStateView SR{qR};
 
-      mfem::real_t fL[Theseus::MAXEQ][Theseus::MAXDIM];
-      mfem::real_t fR[Theseus::MAXEQ][Theseus::MAXDIM];
-      NavierStokesFlux::ComputeInviscidFluxKernel(gas, qL, fL);
-      NavierStokesFlux::ComputeInviscidFluxKernel(gas, qR, fR);
+      const auto left = NavierStokesFlux::MakeInviscidNormalFluxState(gas, qL);
+      const auto right = NavierStokesFlux::MakeInviscidNormalFluxState(gas, qR);
 
       mfem::real_t nor_mag2 = 0.0;
       for (int d = 0; d < dim; ++d) { nor_mag2 += nor[d] * nor[d]; }
@@ -75,8 +73,8 @@ namespace Theseus
 
       const mfem::real_t rhoL = gas.density(SL);
       const mfem::real_t rhoR = gas.density(SR);
-      const mfem::real_t pL = gas.pressure(SL);
-      const mfem::real_t pR = gas.pressure(SR);
+      const mfem::real_t pL = left.pressure;
+      const mfem::real_t pR = right.pressure;
       const mfem::real_t rootL = std::sqrt(rhoL);
       const mfem::real_t rootR = std::sqrt(rhoR);
       const mfem::real_t root_sum_inv = 1.0 / (rootL + rootR);
@@ -150,11 +148,9 @@ namespace Theseus
 
       for (int eq = 0; eq < neq; ++eq)
         {
-          mfem::real_t central = 0.0;
-          for (int d = 0; d < dim; ++d)
-            {
-              central += 0.5 * (fL[eq][d] + fR[eq][d]) * nor[d];
-            }
+          const mfem::real_t central = 0.5 * (
+            NavierStokesFlux::ComputeInviscidNormalFluxEquation(gas, left, nor, eq) +
+            NavierStokesFlux::ComputeInviscidNormalFluxEquation(gas, right, nor, eq));
           flux[eq] = central - 0.5 * diss[eq];
         }
 

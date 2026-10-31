@@ -40,6 +40,68 @@ namespace Theseus
           + gas.sound_speed(S2) * direction_norm);
     }
 
+    // Per-state thermodynamics reused across the normal-flux equations.
+    // The state pointer is borrowed for the duration of the face calculation.
+    struct InviscidNormalFluxState
+    {
+      const mfem::real_t *conserved;
+      mfem::real_t inverse_density;
+      mfem::real_t pressure;
+      mfem::real_t total_enthalpy;
+    };
+
+    template<typename GasT>
+    MFEM_HOST_DEVICE inline static InviscidNormalFluxState
+    MakeInviscidNormalFluxState(const GasT &gas, const mfem::real_t *state)
+    {
+      const PointStateView view{state};
+      const mfem::real_t inverse_density = 1.0 / gas.density(view);
+      const mfem::real_t pressure = gas.pressure(view);
+      return {state, inverse_density, pressure,
+              (gas.energy(view) + pressure) * inverse_density};
+    }
+
+    // Physical Euler flux contracted with a possibly non-unit normal.
+    // No full flux tensor is materialized; the caller supplies dissipation.
+    template<typename GasT>
+    MFEM_HOST_DEVICE inline static mfem::real_t
+    ComputeInviscidNormalFluxEquation(const GasT &gas,
+                                     const InviscidNormalFluxState &sample,
+                                     const mfem::real_t *normal, int equation)
+    {
+      const PointStateView view{sample.conserved};
+      mfem::real_t result = 0.0;
+      for (int direction = 0; direction < gas.dim(); ++direction)
+        {
+          const mfem::real_t momentum = gas.momentum(view, direction);
+          mfem::real_t physical_flux = 0.0;
+          if (equation == gas.L.eq_mass)
+            {
+              physical_flux = momentum;
+            }
+          else if (equation >= gas.L.eq_mom0 &&
+                   equation < gas.L.eq_mom0 + gas.dim())
+            {
+              const int component = equation - gas.L.eq_mom0;
+              physical_flux = gas.momentum(view, component) * momentum *
+                sample.inverse_density;
+              if (component == direction) { physical_flux += sample.pressure; }
+            }
+          else if (equation == gas.L.eq_energy)
+            {
+              physical_flux = momentum * sample.total_enthalpy;
+            }
+          else if (gas.L.eq_scalar0 >= 0 && equation >= gas.L.eq_scalar0 &&
+                   equation < gas.L.eq_scalar0 + gas.L.num_scalars)
+            {
+              physical_flux = gas.scalar(view, equation - gas.L.eq_scalar0) *
+                momentum * sample.inverse_density;
+            }
+          result += physical_flux * normal[direction];
+        }
+      return result;
+    }
+
     // Inviscid / Euler Flux
     template<typename GasT>
     MFEM_HOST_DEVICE inline static void
