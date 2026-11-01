@@ -22,9 +22,13 @@ ATOL = 1e-12
 
 def require_reference_build(build):
     cache = (build / "CMakeCache.txt").read_text()
-    for expected in ("SUTHERLAND:BOOL=OFF", "AXISYMMETRIC:BOOL=OFF", "SUBCELL_FV_BLENDING:BOOL=ON"):
-        if expected not in cache:
-            raise AssertionError(f"Numerical-flux golden cases require {expected}")
+    for option, required in (("SUTHERLAND", False), ("AXISYMMETRIC", False),
+                             ("SUBCELL_FV_BLENDING", True)):
+        match = re.search(rf"^{option}:BOOL=(.*)$", cache, re.MULTILINE)
+        value = match.group(1).strip().upper() if match else None
+        allowed = {"1", "ON", "YES", "TRUE", "Y"} if required else {"0", "OFF", "NO", "FALSE", "N", ""}
+        if value not in allowed:
+            raise AssertionError(f"Numerical-flux golden cases require {option}={'ON' if required else 'OFF'}")
     return cache
 
 
