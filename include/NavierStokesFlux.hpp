@@ -192,24 +192,14 @@ namespace Theseus
       mfem::real_t grad_rho[Theseus::MAXDIM] = {0.0, 0.0, 0.0};
       mfem::real_t grad_p[Theseus::MAXDIM] = {0.0, 0.0, 0.0};
       mfem::real_t grad_t[Theseus::MAXDIM] = {0.0, 0.0, 0.0};
-      mfem::real_t grad_vel[Theseus::MAXDIM][Theseus::MAXDIM] = {{0.0}};
 
       grad_rho[0] = dprim_x[eq_mass];
-      grad_vel[0][0] = dprim_x[eq_mom0];
       grad_p[0] = dprim_x[eq_ener];
       if(dim > 1){
         grad_rho[1] = dprim_y[eq_mass];
-        grad_vel[0][1] = dprim_y[eq_mom0];
-        grad_vel[1][0] = dprim_x[eq_mom0+1];
-        grad_vel[1][1] = dprim_y[eq_mom0+1];
         grad_p[1] = dprim_y[eq_ener];
         if(dim > 2){
           grad_rho[2] = dprim_z[eq_mass];
-          grad_vel[0][2] = dprim_z[eq_mom0];
-          grad_vel[1][2] = dprim_z[eq_mom0+1];
-          grad_vel[2][0] = dprim_x[eq_mom0+2];
-          grad_vel[2][1] = dprim_y[eq_mom0+2];
-          grad_vel[2][2] = dprim_z[eq_mom0+2];
           grad_p[2] = dprim_z[eq_ener];
         }
       }
@@ -219,21 +209,23 @@ namespace Theseus
       mfem::real_t div_vel = 0.0;
       for(int i = 0;i < dim;i++){
         vel[i] = gas.velocity(S, i);
-        div_vel += grad_vel[i][i];
+        const mfem::real_t *gradient_row = i == 0 ? dprim_x
+          : (i == 1 ? dprim_y : dprim_z);
+        div_vel += gradient_row[eq_mom0 + i];
       }
       mfem::real_t radial_rate = 0.0;
       if (axisymmetric)
         {
           const int radial = AxisymmetricGeometry::radial_coordinate;
-          //radial_rate = radius > AxisymmetricGeometry::radius_tolerance ?
-          //  vel[radial] / radius : grad_vel[radial][radial];
 	  if (radius > AxisymmetricGeometry::radius_tolerance)
 	    {
 	      radial_rate = vel[radial] / radius;
 	    }
           else
 	    {
-	      radial_rate = grad_vel[radial][radial];
+              const mfem::real_t *radial_gradient = radial == 0 ? dprim_x
+                : (radial == 1 ? dprim_y : dprim_z);
+              radial_rate = radial_gradient[eq_mom0 + radial];
 	      // Axis parity requires u_r=0. Use the regular trace in the
 	      // viscous energy flux even if the weak axis BC leaves a small
 	      // nonzero radial momentum at the boundary node.
@@ -259,6 +251,10 @@ namespace Theseus
       // Mass row eq=0 remains zero.
       for (int dir = 0; dir < dim; ++dir)
         {
+          // Borrow the existing velocity derivatives; a second matrix copy
+          // would duplicate data already present in the directional inputs.
+          const mfem::real_t *direction_gradient = dir == 0 ? dprim_x
+            : (dir == 1 ? dprim_y : dprim_z);
           // viscous stress tensor components tau[mom,dir]
           for (int mom = 0; mom < dim; ++mom)
             {
@@ -267,11 +263,15 @@ namespace Theseus
               if (mom == dir)
                 {
                   // Perserve legacy tau exactly
-                  tau = mu * (2.0 * grad_vel[mom][dir] - mu_bulk * div_vel);
+                  tau = mu * (2.0 * direction_gradient[eq_mom0 + mom]
+                              - mu_bulk * div_vel);
                 }
               else
                 {
-                  tau = mu * (grad_vel[mom][dir] + grad_vel[dir][mom]);
+                  const mfem::real_t *component_gradient = mom == 0 ? dprim_x
+                    : (mom == 1 ? dprim_y : dprim_z);
+                  tau = mu * (direction_gradient[eq_mom0 + mom]
+                              + component_gradient[eq_mom0 + dir]);
                 }
               
               visc_flux[eq_mom0 + mom][dir] = tau;

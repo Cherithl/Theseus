@@ -15,6 +15,27 @@
 
 namespace
 {
+  // Exercise the source-selected Chandrashekar + Roe-dissipation composition
+  // without changing the production default in ChandrashekarFlux.hpp.
+  struct ChandrashekarRoeDissipationFlux
+  {
+    template<typename Gas>
+    MFEM_HOST_DEVICE void ComputeFaceFlux(
+      const Gas &gas, const mfem::real_t *minus, const mfem::real_t *plus,
+      const mfem::real_t *normal, mfem::real_t *flux) const
+    {
+      Theseus::ChandrashekarFlux::ComputeVolumeFluxKernel(
+        gas, minus, plus, normal, normal, flux);
+      mfem::real_t dissipation[Theseus::MAXEQ] = {0.0};
+      Theseus::Roe_dissipation(gas, Theseus::PointStateView{minus},
+                             Theseus::PointStateView{plus}, normal, dissipation);
+      for (int q = 0; q < gas.num_equations(); ++q)
+        {
+          flux[q] -= dissipation[q];
+        }
+    }
+  };
+
   template<typename Gas, typename Flux = Theseus::LaxFriedrichsFlux::InviscidFlux>
   struct FaceContext
   {
@@ -130,7 +151,8 @@ namespace
                 normal.HostReadWrite()[point * dim + d] =
                   (point % (dim + 1) == d ? 0.0 : (d % 2 ? -0.8 : 0.3)) * (1.0 + 0.01 * point);
               }
-            if constexpr (std::is_same_v<Flux, Theseus::RoeFlux::InviscidFlux> ||
+            if constexpr (std::is_same_v<Flux, ChandrashekarRoeDissipationFlux> ||
+                          std::is_same_v<Flux, Theseus::RoeFlux::InviscidFlux> ||
                           std::is_same_v<Flux, Theseus::RanochaFlux::InviscidFlux> ||
                           std::is_same_v<Flux, Theseus::PirozzoliFlux::InviscidFlux>)
               {
@@ -507,6 +529,7 @@ int main(int argc, char **argv)
                 Theseus::HLLFlux::InviscidFlux,
                 Theseus::RoeFlux::InviscidFlux,
                 Theseus::ChandrashekarFlux::InviscidFlux,
+                ChandrashekarRoeDissipationFlux,
                 Theseus::RanochaFlux::InviscidFlux,
                 Theseus::PirozzoliFlux::InviscidFlux>(
                   dim, nfp, axisymmetric, false, cpg, cpg);
