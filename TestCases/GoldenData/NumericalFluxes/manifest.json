@@ -1,0 +1,275 @@
+{
+  "schema": 1,
+  "reference_revision": "1c6dd52e04b4822aa5c2e01929207b48cd38a8db",
+  "executable_sha256": "34e057fa132fdb036cf0645329361de8e9a20d18eaa77604995c0689094acd06",
+  "cmake_cache_sha256": "13e32f912105fc7e853126eb733129c7d740e7926b8131c1c063ef9b2b7650bf",
+  "device": "cpu",
+  "cycles": [
+    0,
+    10,
+    20
+  ],
+  "rtol": 1e-10,
+  "atol": 1e-12,
+  "cases": {
+    "cpg-hll-cavity": {
+      "compileTime": {
+        "PARABOLIC": true,
+        "SUBCELL_FV_BLENDING": true,
+        "SUTHERLAND": false,
+        "USE_FILTER": false
+      },
+      "runTime": {
+        "order": 2,
+        "dim": 2,
+        "num_equations": 4,
+        "precision": 15,
+        "visualize": true,
+        "paraview": true,
+        "visit": false,
+        "vis_steps": 10,
+        "nancheck": true,
+        "clock_simulation": false,
+        "variable_dt": false,
+        "cfl": 1.0,
+        "dt": 0.0001,
+        "final_time": 1.0,
+        "flow_model": "cns",
+        "Pr": 0.72,
+        "mu": 0.02,
+        "R_gas": 287.05,
+        "gamma": 1.4,
+        "mesh_ordering": "Hilbert",
+        "ser_ref_levels": 0,
+        "mesh_file": "LidDrivenCavity.msh",
+        "conditions": {
+          "initial_conditions": {
+            "signature": 2,
+            "params": {
+              "x1": 0.1,
+              "x2": 1.4
+            },
+            "function": "LidDrivenCavityIC"
+          },
+          "boundary_conditions": {
+            "left": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityWallVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            },
+            "right": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityWallVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            },
+            "bottom": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityWallVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            },
+            "lid": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityLidVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            }
+          }
+        },
+        "numerical_flux": "HLL",
+        "ode_solver": "RK3SSP",
+        "nsteps_max": 20,
+        "print_interval": 1,
+        "checkpoint_save": false,
+        "visualization": {
+          "fields": [
+            "density",
+            "velocity",
+            "pressure"
+          ],
+          "mesh_mode": "gll_subcells"
+        }
+      }
+    },
+    "cpg-roe-cavity": {
+      "compileTime": {
+        "PARABOLIC": true,
+        "SUBCELL_FV_BLENDING": true,
+        "SUTHERLAND": false,
+        "USE_FILTER": false
+      },
+      "runTime": {
+        "order": 2,
+        "dim": 2,
+        "num_equations": 4,
+        "precision": 15,
+        "visualize": true,
+        "paraview": true,
+        "visit": false,
+        "vis_steps": 10,
+        "nancheck": true,
+        "clock_simulation": false,
+        "variable_dt": false,
+        "cfl": 1.0,
+        "dt": 0.0001,
+        "final_time": 1.0,
+        "flow_model": "cns",
+        "Pr": 0.72,
+        "mu": 0.02,
+        "R_gas": 287.05,
+        "gamma": 1.4,
+        "mesh_ordering": "Hilbert",
+        "ser_ref_levels": 0,
+        "mesh_file": "LidDrivenCavity.msh",
+        "conditions": {
+          "initial_conditions": {
+            "signature": 2,
+            "params": {
+              "x1": 0.1,
+              "x2": 1.4
+            },
+            "function": "LidDrivenCavityIC"
+          },
+          "boundary_conditions": {
+            "left": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityWallVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            },
+            "right": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityWallVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            },
+            "bottom": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityWallVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            },
+            "lid": {
+              "type": "no-slip-adiabatic",
+              "velocity": {
+                "vector": "LidDrivenCavityLidVelBCVector"
+              },
+              "heat": {
+                "scalar": "LidDrivenCavityAdiaBCScalar"
+              }
+            }
+          }
+        },
+        "numerical_flux": "Roe",
+        "ode_solver": "RK3SSP",
+        "nsteps_max": 20,
+        "print_interval": 1,
+        "checkpoint_save": false,
+        "visualization": {
+          "fields": [
+            "density",
+            "velocity",
+            "pressure"
+          ],
+          "mesh_mode": "gll_subcells"
+        }
+      }
+    },
+    "lte-hll-tgv": {
+      "compileTime": {
+        "PARABOLIC": true,
+        "SUBCELL_FV_BLENDING": true,
+        "SUTHERLAND": false,
+        "USE_FILTER": false
+      },
+      "runTime": {
+        "order": 2,
+        "dim": 3,
+        "num_equations": 5,
+        "precision": 15,
+        "visualize": true,
+        "paraview": true,
+        "visit": false,
+        "vis_steps": 10,
+        "nancheck": true,
+        "clock_simulation": false,
+        "variable_dt": false,
+        "cfl": 0.1,
+        "final_time": 1.0,
+        "flow_model": "cns",
+        "Pr": 0.72,
+        "mu": 0.000625,
+        "R_gas": 287.05,
+        "gamma": 1.4,
+        "mesh_ordering": "Hilbert",
+        "mesh_file": "periodic.msh",
+        "conditions": {
+          "initial_conditions": {
+            "signature": 1,
+            "function": "CompressibleTaylorGreenVortexIC",
+            "params": {
+              "x1": 0.2
+            }
+          }
+        },
+        "numerical_flux": "HLL",
+        "ode_solver": "RK3SSP",
+        "ser_ref_levels": 0,
+        "dt": 1e-05,
+        "nsteps_max": 20,
+        "print_interval": 1,
+        "checkpoint_save": false,
+        "gas_model": "lte",
+        "gas_mixture": "air11",
+        "plato_solver": "LTE_table_rhoT_(air11)",
+        "N_rho": 31,
+        "N_T": 41,
+        "rho_min": 0.5,
+        "rho_max": 2.0,
+        "T_min": 200.0,
+        "T_max": 2000.0,
+        "rho_dist": "log",
+        "T_dist": "log",
+        "visualization": {
+          "fields": [
+            "density",
+            "velocity",
+            "pressure",
+            "temperature"
+          ],
+          "mesh_mode": "gll_subcells"
+        }
+      }
+    }
+  },
+  "build_options": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "SUTHERLAND": "OFF",
+    "SUBCELL_FV_BLENDING": "ON",
+    "AXISYMMETRIC": "OFF"
+  },
+  "reference_mpi_ranks": 2
+}

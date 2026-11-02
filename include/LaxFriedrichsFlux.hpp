@@ -59,34 +59,20 @@ namespace Theseus
                           const mfem::real_t *nor,
                           mfem::real_t *flux)
     {
-      const int dim = gasModel.dim();
       const int neq = gasModel.num_equations();
 
-      mfem::real_t inv_flux_1[Theseus::MAXEQ][Theseus::MAXDIM];
-      mfem::real_t inv_flux_2[Theseus::MAXEQ][Theseus::MAXDIM];
-
-      NavierStokesFlux::ComputeInviscidFluxKernel(gasModel, state1, inv_flux_1);
-      NavierStokesFlux::ComputeInviscidFluxKernel(gasModel, state2, inv_flux_2);
-
-      const mfem::real_t lambda_max =
-        NavierStokesFlux::MaximumNormalWaveSpeed(
-          gasModel, state1, state2, nor);
-
-      for (int ieq = 0; ieq < neq; ++ieq)
+      const auto left = NavierStokesFlux::MakeInviscidNormalFluxState(gasModel, state1);
+      const auto right = NavierStokesFlux::MakeInviscidNormalFluxState(gasModel, state2);
+      const mfem::real_t lambda_max = NavierStokesFlux::MaximumNormalWaveSpeed(
+        gasModel, state1, state2, nor);
+      for (int equation = 0; equation < neq; ++equation)
         {
-          mfem::real_t fn1 = 0.0;
-          mfem::real_t fn2 = 0.0;
-
-          for (int d = 0; d < dim; ++d)
-            {
-              fn1 += inv_flux_1[ieq][d] * nor[d];
-              fn2 += inv_flux_2[ieq][d] * nor[d];
-            }
-
-          const mfem::real_t central_flux = 0.5 * (fn1 + fn2);
-          const mfem::real_t jump = state2[ieq] - state1[ieq];
- 
-          flux[ieq] = central_flux - 0.5 * lambda_max * jump;
+          const mfem::real_t normal_left =
+            NavierStokesFlux::ComputeInviscidNormalFluxEquation(gasModel, left, nor, equation);
+          const mfem::real_t normal_right =
+            NavierStokesFlux::ComputeInviscidNormalFluxEquation(gasModel, right, nor, equation);
+          flux[equation] = 0.5 * (normal_left + normal_right) -
+            0.5 * lambda_max * (state2[equation] - state1[equation]);
         }
     }
 

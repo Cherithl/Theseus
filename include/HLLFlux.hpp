@@ -64,11 +64,8 @@ namespace Theseus
       Theseus::PointStateView S1{state1};
       Theseus::PointStateView S2{state2};
 
-      mfem::real_t inv_flux_1[Theseus::MAXEQ][Theseus::MAXDIM];
-      mfem::real_t inv_flux_2[Theseus::MAXEQ][Theseus::MAXDIM];
-
-      NavierStokesFlux::ComputeInviscidFluxKernel(gasModel, state1, inv_flux_1);
-      NavierStokesFlux::ComputeInviscidFluxKernel(gasModel, state2, inv_flux_2);
+      const auto left = NavierStokesFlux::MakeInviscidNormalFluxState(gasModel, state1);
+      const auto right = NavierStokesFlux::MakeInviscidNormalFluxState(gasModel, state2);
 
       mfem::real_t un1 = 0.0;
       mfem::real_t un2 = 0.0;
@@ -96,13 +93,10 @@ namespace Theseus
 
       for (int ieq = 0; ieq < neq; ++ieq)
         {
-          mfem::real_t fn1 = 0.0;
-          mfem::real_t fn2 = 0.0;
-          for (int d = 0; d < dim; ++d)
-            {
-              fn1 += inv_flux_1[ieq][d] * nor[d];
-              fn2 += inv_flux_2[ieq][d] * nor[d];
-            }
+          const mfem::real_t fn1 = NavierStokesFlux::ComputeInviscidNormalFluxEquation(
+            gasModel, left, nor, ieq);
+          const mfem::real_t fn2 = NavierStokesFlux::ComputeInviscidNormalFluxEquation(
+            gasModel, right, nor, ieq);
           if (sL >= 0.0)
             {
               flux[ieq] = fn1;
