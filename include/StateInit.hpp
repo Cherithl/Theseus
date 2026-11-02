@@ -6,6 +6,7 @@
 #pragma once
 
 #include "ConditionFactory.hpp"
+#include "../tests/plato_helpers.hpp"
 
 namespace Prandtl
 {
@@ -210,6 +211,61 @@ namespace Prandtl
   };
   // Global static instance to ensure registration happens at startup.
   static RegisterCompressibleTaylorGreenVortex regCompressibleTaylorGreenVortex;
+
+  // Compressible Taylor Green Vortex initial condition for LTE
+  std::function<void(const mfem::Vector&, mfem::Vector&)> CompressibleTGV_LTEIC(mfem::real_t Ma, mfem::real_t rho0, mfem::real_t T0)
+  {
+    // const mfem::real_t rho0 = 1.0e-3;
+    // const mfem::real_t T0 = 4500.0;
+
+    // Initialize PLATO for LTE mixture calculations
+    const std::string solver("LTE_table_rhoT_(air5)");
+    const std::string mixture("air5");
+    const std::string path("/work/nvme/bdyp/clavisetty/Theseus-Cherith/tpl/install/database");
+    std::string empty_str("empty");
+    plato_initialize(solver.c_str(), mixture.c_str(), empty_str.c_str(), empty_str.c_str(), path.c_str());
+
+    PlatoMixture mix0;
+    plato_set_state(rho0, T0, mix0);
+    const mfem::real_t p0 = mix0.P;
+    const mfem::real_t U0 = Ma * mix0.c;
+
+    return [rho0, T0, p0, U0](const mfem::Vector &x, mfem::Vector &y)
+    {
+      MFEM_ASSERT(x.Size() == 3, "");
+
+      const mfem::real_t velX =  U0 * std::sin(x(0)) * std::cos(x(1)) * std::cos(x(2));
+      const mfem::real_t velY = -U0 * std::cos(x(0)) * std::sin(x(1)) * std::cos(x(2));
+      const mfem::real_t velZ = 0.0;
+
+      const mfem::real_t p = p0 + (rho0 * U0 * U0 / 16.0) * (std::cos(2.0 * x(0)) + std::cos(2.0 * x(1))) * (std::cos(2.0 * x(2)) + 2.0);
+      MFEM_VERIFY(p > 0.0, "LTE TGV initial pressure must be positive.");
+
+      PlatoMixture mix;
+      mfem::real_t rho = plato_find_density_given_P_T(p, T0, rho0, mix);
+      plato_set_state(rho, T0, mix);
+
+      const mfem::real_t energy = rho * mix.e + 0.5 * rho * (velX * velX + velY * velY + velZ * velZ);
+
+      y(0) = rho;
+      y(1) = rho * velX;
+      y(2) = rho * velY;
+      y(3) = rho * velZ;
+      y(4) = energy;
+    };
+  }
+
+  // Registration helper that automatically registers these functions
+  struct RegisterCompressibleTGV_LTE
+  {
+    RegisterCompressibleTGV_LTE()
+    {
+      // Register initial condition
+      Prandtl::ConditionFactory::Instance().RegisterInitialCondition3("CompressibleTGV_LTEIC", CompressibleTGV_LTEIC);
+    }
+  };
+  // Global static instance to ensure registration happens at startup.
+  static RegisterCompressibleTGV_LTE regCompressibleTGV_LTE;
 
 
 

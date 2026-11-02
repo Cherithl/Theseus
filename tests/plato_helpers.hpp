@@ -127,6 +127,32 @@ plato_set_state(const real_t rho, const real_t T, PlatoMixture &mix)
     plato_set_gradients(rho, T, mix);
 }
 
+static real_t
+plato_find_density_given_P_T(const real_t P, const real_t T, const real_t rho_init, PlatoMixture &mix)
+{
+    real_t rho = rho_init;
+    bool converged = false;
+    for (int iter = 0; iter < 100; ++iter)
+    {
+        plato_set_state(rho, T, mix);
+
+        MFEM_VERIFY(std::isfinite(mix.P) && mix.P > 0.0, "Invalid PLATO pressure during LTE TGV density recovery.");
+
+        const mfem::real_t rho_new = rho * P / mix.P;
+
+        MFEM_VERIFY(std::isfinite(rho_new) && rho_new > 0.0, "Invalid density during LTE TGV initialization.");
+
+        if (std::abs(rho_new - rho) <= 1e-12 * rho) {
+            rho = rho_new;
+            converged = true;
+            break;
+        }
+        rho = rho_new;
+    }
+    MFEM_VERIFY(converged, "LTE TGV density recovery failed to converge.");
+    return rho;
+}
+
 static void
 plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
 {
