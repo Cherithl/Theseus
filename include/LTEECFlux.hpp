@@ -114,6 +114,7 @@ namespace Theseus
 
       // Dissipative part of the flux based on Roe's approximate Riemann solver
       // Roe_dissipation(gasModel, S1, S2, nor, diss);
+      Lax_dissipation(gasModel, S1, S2, nor, diss);
 
       flux[mass_eq] = rho_avg * vn - diss[mass_eq];
       flux[ener_eq] = 0.0;
