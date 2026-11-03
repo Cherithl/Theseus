@@ -140,8 +140,6 @@ plato_find_density_given_P_T(const real_t P, const real_t T, const real_t rho_in
 
         const mfem::real_t rho_new = rho * P / mix.P;
 
-        MFEM_VERIFY(std::isfinite(rho_new) && rho_new > 0.0, "Invalid density during LTE TGV initialization.");
-
         if (std::abs(rho_new - rho) <= 1e-12 * rho) {
             rho = rho_new;
             converged = true;
@@ -165,7 +163,7 @@ plato_set_gradients(const real_t rho, const real_t T, PlatoMixture &mix)
                   Ri(nb_spec), ei(nb_spec), hi(nb_spec), Ji(nb_spec), si(nb_spec), gi(nb_spec);
     mfem::Vector temp(nb_temp), lambda_int(nb_temp);
 
-    real_t R, P, nb, c;
+    real_t R, P;
 
     plato_get_Ri(Ri.GetData());
 

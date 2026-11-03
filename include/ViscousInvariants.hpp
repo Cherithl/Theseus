@@ -79,9 +79,8 @@ namespace Theseus
           Fail(where, "table_index_overflow", gas.dim(), gas.num_equations(),
                layout.nx, layout.ny);
         }
-      if (layout.P_idx != 0 || layout.e_idx != 1 || layout.cv_idx != 2 ||
-          layout.cp_idx != 3 || layout.R_eq_idx != 4 || layout.gamma_eq_idx != 5 ||
-          layout.c_idx != 6 || layout.mu_idx != 7 || layout.lambda_idx != 8)
+      if (layout.H_idx != 0 || layout.H_r_idx != 1 || layout.H_T_idx != 2 ||
+          layout.H_r_T_idx != 3 || layout.mu_idx != 4 || layout.lambda_idx != 5)
         {
           Fail(where, "table_property_indices", gas.dim(), gas.num_equations(),
                layout.mu_idx, layout.lambda_idx);

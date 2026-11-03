@@ -116,7 +116,7 @@ namespace Theseus
         Di(nb_spec),Dij(nb_spec*(nb_spec + 1)/2), di(nb_spec);
       mfem::Vector temp(nb_temp), lambda_int(nb_temp);
 
-      mfem::real_t R, P, nb, e, betaT, alpha, cv, gam, cp, c, s, H,
+      mfem::real_t R, P, nb, e, betaT, alpha, s, H,
         mu, sigma, lambda_trh, lambda_tre, lambda_reactive;
 
       plato_get_Ri(Ri.GetData());
@@ -152,7 +152,7 @@ namespace Theseus
               H = Theseus::Kernels::Dot(nb_spec, yi.GetData(), Hi.GetData());
 
               // Derived thermodynamic properties
-              // isothermal compressibility, coeff of thermal expansion, cv, cp, gamma, sound_speed at equilibrium
+              // isothermal compressibility, coeff of thermal expansion
               betaT = plato_get_eq_isoth_comp(&P, &T, Xi.GetData());
               alpha = plato_get_eq_coeff_th_exp(&P, &T, Xi.GetData());
               // cv    = plato_get_eq_cv(&rho, &T, yi.GetData()); // CL NOTE : Maybe use cv from Bilinear interpolation coz it is only used for the Newton iteration?
