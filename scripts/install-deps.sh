@@ -138,7 +138,11 @@ build_metis() {
   cd - >/dev/null
 }
 
-build_plato() {
+build_plato() (
+    export CC=gcc
+    export CXX=g++
+    export FC=gfortran
+    export F77=gfortran
     local src="$SRC_DIR/plato"
 
     cd "$src"
@@ -150,7 +154,7 @@ build_plato() {
     run_logged "plato-install" make install
 
     cd - >/dev/null
-}
+)
 
 build_thermo_database() {
     local src="$SRC_DIR/database"
