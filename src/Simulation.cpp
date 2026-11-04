@@ -8,6 +8,7 @@
 #include "AxisymmetryConfig.hpp"
 #include "SimFactory.hpp"
 #include "StateInit.hpp"
+#include "../tests/plato_helpers.hpp"
 #include "RadialProfile.hpp"
 #include "InitialCondition.hpp"
 #include "BoundaryStateConfig.hpp"
@@ -1000,6 +1001,16 @@ namespace Theseus
         return 1;
       }
 
+#ifdef SOURCE_TERMS
+    // PlatoMixture mix;
+    // plato_set_state(1.0, 293.15, mix); // CL NOTE : Wall Temperature set to 293.15
+    // mfem::real_t u_target = 1.5 * mix.c;
+    mfem::real_t u_target = 5.1568342221905391e+02; // CL NOTE : rho=1.0; Mach = 1.5, Tw = 293.15
+    mfem::real_t e_target = 2.1127562962253299e+05; // CL NOTE : rho=1.0; Mach = 1.5, Tw = 293.15
+    mfem::real_t target_state[Theseus::MAXEQ] = {1.0, u_target, 0.0, 0.0, e_target};
+    rhsOp->SetTargetState(target_state, dim);
+#endif
+
     if(myRank == 0 && debug_simulation){
       std::cout << "Theseus RHS Operator finalized." << std::endl;
     }
@@ -1244,6 +1255,9 @@ namespace Theseus
             ? next_checkpoint_t : mfem::infinity();
           dt_real = LimitTimeStepToEvents(dt, t,
                                           {t_final, next_visualization, next_checkpoint});
+#ifdef SOURCE_TERMS
+          rhsOp->SetCurrentTime(dt_real);
+#endif
 
           // Perform the time step
           if(ti > 1){
